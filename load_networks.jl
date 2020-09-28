@@ -26,16 +26,7 @@ function eval_net(input, net_dict, copies::Int64)
 end
 
 
-### TEST ON ABS() FUNCTION ###
-function test_abs()
-	# abs(x) = W₁*relu(W₀*x)
-	W₀ = [1 0; -1 0; 0 1]
-	W₁ = [1 1 0; 0 0 1]
-	Weights = [W₀, W₁]
-end
-
-
-### TEST ON PYRAMID FUNCTION ###
+### Pyramid test function ###
 function test_pyramid()
 	W0 = [1 0; -1 0; 2 0; -2 0; 0 1; 0 -1; 0 2; 0 -2]
 	b0 = [0; 1; -1; 1; 0; 1; -1; 1]
@@ -90,41 +81,6 @@ function test_random_flux(in_d, out_d, hdim, layers; Aₒ=[], bₒ=[], value=fal
 end
 
 
-# Load Haruki's Cartpole Models
-#=
-net_no = load("models/model_2020_0811_1424_relu_no_regularization.jld2")
-net_l1 = load("models/model_2020_0811_1220_relu_l1_regularization.jld2")
-net_l2 = load("models/model_2020_0811_1516_relu_spectral_regularization.jld2")
-"output_mean_array"
-"weight_array"
-"input_std_array"
-"bias_array"
-"normalization_required"
-"outptu_std_array"
-"activation"
-"input_mean_array"
-"dt"
-"cov"
-=#
-function haruki_net(norm::String)
-	if norm == "no"
-		net = load("models/model_2020_0811_1424_relu_no_regularization.jld2")
-	elseif norm == "l1"
-		net = load("models/model_2020_0811_1220_relu_l1_regularization.jld2")
-	elseif norm == "l2"
-		net = load("models/model_2020_0811_1516_relu_spectral_regularization.jld2")
-	else
-		error("Invalid input!")
-	end
-	
-	layers = [Dense(net["weight_array"][i], net["bias_array"][i], relu) for i in 1:length(net["weight_array"])-1]
-	layers = vcat(layers, [Dense(net["weight_array"][end], net["bias_array"][end], identity)])
-	flux_net = Chain(layers...)
-	return flux2augmented(flux_net)
-end
-
-
-
 # Load ACAS Networks #
 #=
 net = matread("models/ACAS/ACASXU_run2a_1_1_batch_2000.mat")
@@ -160,7 +116,6 @@ net = matread("models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat")
 "X_std"
 "Y_mean"
 "Y_std"
-"test_loss" *only on the L1 vs L2 nets
 input  = [θ, θ_dot]_t
 output = [θ, θ_dot]_t+1
 =#
@@ -177,7 +132,6 @@ function pendulum_net(model::String, copies::Int64)
 		W = net_dict["weights"][1]*inv(σ_x)*σ_y*net_dict["weights"][end]
 		b = net_dict["weights"][1]*inv(σ_x)*(σ_y*net_dict["biases"][end]' + μ_y - μ_x) + net_dict["biases"][1]'
 		layers = vcat(layers, [Dense(W, b, relu)])
-		# layers = vcat(layers, [Dense(net_dict["weights"][1]*net_dict["weights"][end], net_dict["weights"][1]*net_dict["biases"][end]' + net_dict["biases"][1]', relu)])
 	end
 	layers = vcat(layers, [Dense(net_dict["weights"][i], net_dict["biases"][i]', relu) for i in 2:length(net_dict["weights"])-1])
 	layers = vcat(layers, [Dense(net_dict["weights"][end], net_dict["biases"][end]', identity)])

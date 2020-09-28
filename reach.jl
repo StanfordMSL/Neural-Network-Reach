@@ -1,6 +1,4 @@
 using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib
-# using Distributed
-# addprocs(4)
 include("load_networks.jl")
 include("unique_custom.jl")
 
@@ -69,8 +67,7 @@ function local_map(state::Vector{BitVector}, weights::Vector{Matrix{Float64}})
 		matrix = diagm(0 => state[l])*weights[l]*matrix
 	end
 	matrix = weights[end]*matrix
-	rank(matrix[:,1:end-1]) != length(matrix[:,end]) ? println("Rank deficient Map") : nothing
-
+	
 	return matrix[:,1:end-1], matrix[:,end] # C,d of y = Cx+d
 end
 
@@ -285,7 +282,6 @@ function add_neighbor_states(state::Vector{BitVector}, neighbor_indices::Vector{
 		neighbor_state = type1!(idx2repeat[idx], neighbor_state, weights)
 		neighbor_state = type3!(zerows, neighbor_state, weights, neighbor_constraint)
 
-		# maybe make a BST to do this check faster?
 		if !haskey(state2essential, neighbor_state) && neighbor_state ∉ working_set
 			push!(working_set, neighbor_state)
 			state2essential[neighbor_state] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
@@ -299,7 +295,7 @@ end
 function type1!(set, neighbor_state, weights)
 	for neuron_idx in set # Type 1 neurons
 		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
-		new_constraint = -(1-2*neighbor_state[layer][neuron])*neuron_map(layer, neuron, neighbor_state, weights) #flipped
+		new_constraint = -(1-2*neighbor_state[layer][neuron])*neuron_map(layer, neuron, neighbor_state, weights) # flipped
 
 		if isapprox(new_constraint, zeros(length(new_constraint)), atol=1e-10 ) # sometimes previous flipping leads to zerow
 			neighbor_state[layer][neuron] = 0
@@ -359,10 +355,7 @@ function poly_intersection(A₁, b₁, A₂, b₂; presolve=false)
 		return poly_intersection(A₁, b₁, A₂, b₂, presolve=true)
 	else
 		@show termination_status(model)
-		@show A₁
-		@show b₁
-		@show A₂
-		@show b₂
+		@show A₁; @show b₁; @show A₂; @show b₂
 		error("Intersection LP error!")
 	end
 end
@@ -483,14 +476,16 @@ end
 ### MAIN ALGORITHM ###
 # Given input point and weights return state2input, state2output, state2map, plt_in, plt_out
 # set reach=false for just cell enumeration
-function forward_reach(weights, Aᵢ, bᵢ, Aₒ, bₒ; reach=false, back=false, verification=false)
+# Supports looking for multiple backward reachable sets at once
+function forward_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
 	# Construct necessary data structures #
 	state2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A,b) input constraints
 	state2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A′,b′) ouput constraints
-	state2backward = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A_back,b_back) backward reachable constraints
+	state2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
+	# state2backward = Vector{ Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}} }(Dict(), length(Aₒ)) # Dict from state -> (A_back,b_back) backward reachable constraints
 	state2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (C,d) local affine map
 	state2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from state to neuron indices we know are essential
-	working_set = Set{Vector{BitVector}}()                     # Neuron states we want to explore
+	working_set = Set{Vector{BitVector}}() # Network states we want to explore
 
 	# Initialize algorithm #
 	input = get_input(Aᵢ, bᵢ)
@@ -500,24 +495,27 @@ function forward_reach(weights, Aᵢ, bᵢ, Aₒ, bₒ; reach=false, back=false,
 	num_neurons = sum([length(state[layer]) for layer in 1:length(state)])
 	
 	# Begin cell enumeration #
-	i, saved_lps, solved_lps = (1, 0, 0)
+	i, saved_lps, solved_lps, singular_maps = (1, 0, 0, 0)
 	while !isempty(working_set)
 		println(i)
 		state = pop!(working_set)
 
 		# Get local affine_map
 		C, d = local_map(state, weights)
+		rank(C) != length(d) ? singular_maps += 1 : nothing
 		state2map[state] = (C,d)
 
 		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, state, num_neurons)
 
 		# We can check this before removing redundant constraints
 		if verification
-			Aᵤ, bᵤ = (Aₒ*C, bₒ-Aₒ*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
-			if poly_intersection(A, b, Aᵤ, bᵤ)
-				println("Found input that maps to target set!")
-				@show state
-				return state2input, state2output, state2map, state2backward
+			for k in 1:length(Aₒ)
+				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
+				if poly_intersection(A, b, Aᵤ, bᵤ)
+					println("Found input that maps to target set!")
+					@show state
+					return state2input, state2output, state2map, state2backward
+				end
 			end
 		end
 
@@ -530,23 +528,21 @@ function forward_reach(weights, Aᵢ, bᵢ, Aₒ, bₒ; reach=false, back=false,
 
 		reach ? state2output[state] = affine_map(A, b, C, d) : nothing
 		if back
-			Aᵤ, bᵤ = (Aₒ*C, bₒ-Aₒ*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
-			if poly_intersection(A, b, Aᵤ, bᵤ)
-				state2backward[state] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
+			for k in 1:length(Aₒ)
+				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
+				if poly_intersection(A, b, Aᵤ, bᵤ)
+					state2backward[k][state] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
+				end
 			end
 		end
 		
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end
 	verification ? println("No input maps to the target set.") : nothing
+	println("Singular maps: ", singular_maps)
 	total_lps = saved_lps + solved_lps
 	println("Total solved LPs: ", solved_lps)
 	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
 	return state2input, state2output, state2map, state2backward
 end
 
-
-#=
-It looks like state2essential actually isn't giving me a speed increase. 
-Slightly slower but I'm keeping it for now.
-=#
