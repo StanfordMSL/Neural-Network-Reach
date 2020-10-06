@@ -1,4 +1,4 @@
-using Flux, Tracker, JLD2, FileIO, MAT
+using Flux, Tracker, JLD2, FileIO, MAT, NPZ
 
 # Converts network weights and biases to just weights. i.e. only linear maps, not affine maps.
 # Works for Dense Flux networks
@@ -44,7 +44,8 @@ function test_pyramid()
 	b4 = [0]
 
 	pyramid = Chain(Dense(W0,b0,relu), Dense(W1,b1,relu), Dense(W2,b2,relu), Dense(W3,b3,relu), Dense(W4,b4,identity) )
-	return flux2augmented(pyramid)
+	return pyramid
+	# return flux2augmented(pyramid)
 end
 
 
@@ -136,6 +137,13 @@ function pendulum_net(model::String, copies::Int64)
 	layers = vcat(layers, [Dense(net_dict["weights"][i], net_dict["biases"][i]', relu) for i in 2:length(net_dict["weights"])-1])
 	layers = vcat(layers, [Dense(net_dict["weights"][end], net_dict["biases"][end]', identity)])
 	flux_net = Chain(layers...)
+	str = string("pend_net_", copies, ".mat")
+	matwrite(str,
+	Dict(
+	"W" => [Float64.(flux_net[i].W) for i in 1:length(flux_net)],
+	"b" => [Float64.(flux_net[i].b) for i in 1:length(flux_net)],
+	"range_for_scaling" => [1.0, 1.0, 1.0],
+	"means_for_scaling" => [0.0, 0.0, 0.0]))
 	return flux2augmented(flux_net), net_dict
 end
 
