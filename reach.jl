@@ -312,9 +312,10 @@ function type3!(set, neighbor_state, weights, neighbor_constraint)
 		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
 		new_constraint = -neuron_map(layer, neuron, neighbor_state, weights) # negative because testing 0->1 flip
 		if !isapprox(new_constraint, zeros(length(new_constraint)), atol=1e-10 )
-			if isapprox(normalize_row(new_constraint), neighbor_constraint, atol=1e-10 )
-				neighbor_state[layer][neuron] = 1
-			end
+			neighbor_state[layer][neuron] = 1
+			# if isapprox(normalize_row(new_constraint), neighbor_constraint, atol=1e-10 )
+			# 	neighbor_state[layer][neuron] = 1
+			# end
 		end
 	end
 	return neighbor_state
@@ -518,9 +519,9 @@ function forward_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 				end
 			end
 		end
-
-		# center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
-		# check_state(center, weights, state)
+		
+		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
+		check_state(center, weights, state)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, state2essential[state])
 		working_set, state2essential = add_neighbor_states(state, neighbor_indices, working_set, idx2repeat, zerows, weights, state2essential)

@@ -1,5 +1,6 @@
+using Plots
 include("reach.jl")
-pyplot()
+# pyplot()
 
 bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,b]
 
@@ -46,7 +47,7 @@ end
 
 # Plots all polyhedra
 function plot_hrep_pendulum(state2constraints, net_dict; space = "input")
-	plt = plot(reuse = false, legend=false, xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
+	input_plt = plot(reuse = false, legend=false, xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
 	for state in keys(state2constraints)
 		A, b = state2constraints[state]
 		if space == "input"				
@@ -64,9 +65,10 @@ function plot_hrep_pendulum(state2constraints, net_dict; space = "input")
 			@show reg
 			error("Empty polyhedron.")
 		end
-		plot!(plt,  reg)
+		plot!(input_plt,  reg, fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 	end
-	return plt
+
+	return input_plt
 end
 
 
@@ -78,42 +80,49 @@ function damped_plt(init, steps::Int64, net_dict)
 	for i in 2:length(t)
 		state_traj[:,i] = eval_net(state_traj[:,i-1], net_dict, 0)
 	end
-	plot!(plt, t, rad2deg.(state_traj[1,:]), linewidth=3, legend=false, xlabel="Time (s.)", ylabel="Angle (deg.)")
+	plot!(plt, t, rad2deg.(state_traj[1,:]), linewidth=3, legend=false, xlabel="Time (s.)", ylabel="Angle (deg.)", fontfamily=font(14, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 	return plt
 end
 
 ######################################################################
 
 # Pendulum Examples ##
-copies = 150 # copies = 0 is original network
+copies = 50 # copies = 0 is original network
 model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
 
 weights, net_dict = pendulum_net(model, copies)
-Aᵢ, bᵢ = input_constraints_pendulum(weights, "box", net_dict=net_dict)
+Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict=net_dict)
 Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict=net_dict)
 
 @time begin
-state2input, state2output, state2map, state2backward = forward_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
+state2input, state2output, state2map, state2backward = forward_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=true, verification=false)
 end
 @show length(state2input)
 
 # Plot all regions #
 plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
-# plt_in2  = plot_hrep_pendulum(state2backward, net_dict, space="input")
-# plt_out = plot_hrep_pendulum(state2output, net_dict, space="output")
+savefig("figures/input_50_f.png")
+plt_in2  = plot_hrep_pendulum(state2backward[1], net_dict, space="input")
+savefig("figures/back_reach_f.png")
+plt_out = plot_hrep_pendulum(state2output, net_dict, space="output")
+savefig("figures/output_50_f.png")
 
 
 # Overlay samples on forward reach plot #
-# n = 1000
-# box = deg2rad(90)
-# in_dat = [[bound_r(-box,box), bound_r(-box,box)] for _ in 1:n]
-# out_dat = [eval_net(pnt, net_dict, copies) for pnt in in_dat]
-# in_dat = hcat(in_dat...)'
-# out_dat = hcat(out_dat...)'
-# scatter!(plt_in1, rad2deg.(in_dat[:,1]), rad2deg.(in_dat[:,2]), legend=false)
-# scatter!(plt_out, rad2deg.(out_dat[:,1]), rad2deg.(out_dat[:,2]), legend=false)
+n = 1000
+box = deg2rad(90)
+in_dat = [[bound_r(-box,box), bound_r(-box,box)] for _ in 1:n]
+out_dat = [eval_net(pnt, net_dict, copies) for pnt in in_dat]
+in_dat = hcat(in_dat...)'
+out_dat = hcat(out_dat...)'
+scatter!(plt_in1, rad2deg.(in_dat[:,1]), rad2deg.(in_dat[:,2]), legend=false)
+savefig("figures/input_50_sampled_f.png")
+scatter!(plt_out, rad2deg.(out_dat[:,1]), rad2deg.(out_dat[:,2]), legend=false)
+savefig("figures/output_50_sampled_f.png")
+
 
 
 ## Generate damped sine plot ##
-# init = [deg2rad(30), deg2rad(0)]
-# plt_sin = damped_plt(init, 50, net_dict)
+init = [deg2rad(30), deg2rad(0)]
+plt_sin = damped_plt(init, 50, net_dict)
+savefig("figures/damped_sine_f.png")
