@@ -51,22 +51,18 @@ function plot_hrep_random(state2constraints; space = "input", net_dict = [])
 	return plt
 end
 
-######################################################################
-## Pyramid Example ##
-# weights = test_pyramid() # get NN
-
-## Random Examples ##
+###########################
+######## SCRIPTING ########
+###########################
 flux_net, weights = test_random_flux(2, 2, 50, 3) # (in_d, out_d, hdim, layers; Aₒ=[], bₒ=[], value=false)
 Aᵢ, bᵢ = input_constraints_random(weights, "hexagon")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
 @time begin
-state2input, state2output, state2map, state2backward = forward_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
 end
 @show length(state2input)
 
-# Plot all regions #
+# Plot all regions (only 2D input) #
 plt_in  = plot_hrep_random(state2input, space="input")
-# plt_out = plot_hrep_random(state2output, space="output")
-# savefig("figures/cell_enum_hex_f.png") # 1368

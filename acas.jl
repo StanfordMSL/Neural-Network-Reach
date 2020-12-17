@@ -1,8 +1,6 @@
 using BenchmarkTools
 include("reach.jl")
 
-bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,b]
-
 ### INPUT CONSTRAINT FUNCTIONS ###
 # acas properties defined in original reluplex paper appendix
 # For neural networks we often normalize the data before input to the network.
@@ -47,7 +45,6 @@ function input_constraints_acas(weights, type::String; net_dict=[])
 	else
 		error("Invalid input constraint specification.")
 	end
-	
 	return Aᵢ, bᵢ
 end
 
@@ -93,34 +90,31 @@ function output_constraints_acas(weights, type::String; net_dict=[])
 end
 
 
-######################################################################
-## ACAS Examples ##
-weights, net_dict = acas_net(5,7)
+###########################
+######## SCRIPTING ########
+###########################
+weights, net_dict = acas_net(5,7) # specify which acas network to analyze, acas_net(1:5,1:9)
 property = "acas property 3"
 Aᵢ, bᵢ = input_constraints_acas(weights, property, net_dict=net_dict)
 Aₒ, bₒ = output_constraints_acas(weights, property, net_dict=net_dict)
 
-function profile(weights, Aᵢ, bᵢ, Aₒ, bₒ)
-	state2input, state2output, state2map, state2backward = forward_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=true, verification=false)
-	@show length(state2input)
-	return nothing
-end
-
-# bm = @benchmark state2input, state2output, state2map, state2backward = forward_reach($weights, $Aᵢ, $bᵢ, $[Aₒ], $[bₒ], reach=false, back=false, verification=true)
+# Multiple backward reachability queries can be solved by specifying multiple output sets i.e. [Aₒ₁, Aₒ₂], [bₒ₁, bₒ₂]
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=true)
+@show length(state2input)
 
 
 ## Solve for explicit policy ##
-This doesn't really incur extra solve time
-Aₒ₁, bₒ₁ = output_constraints_acas(weights, "COC", net_dict=net_dict)
-Aₒ₂, bₒ₂ = output_constraints_acas(weights, "weak right", net_dict=net_dict)
-Aₒ₃, bₒ₃ = output_constraints_acas(weights, "strong right", net_dict=net_dict)
-Aₒ₄, bₒ₄ = output_constraints_acas(weights, "weak left", net_dict=net_dict)
-Aₒ₅, bₒ₅ = output_constraints_acas(weights, "strong left", net_dict=net_dict)
+# We can identify exact input sets that lead to each possible output advisory
+# Aₒ₁, bₒ₁ = output_constraints_acas(weights, "COC", net_dict=net_dict)
+# Aₒ₂, bₒ₂ = output_constraints_acas(weights, "weak right", net_dict=net_dict)
+# Aₒ₃, bₒ₃ = output_constraints_acas(weights, "strong right", net_dict=net_dict)
+# Aₒ₄, bₒ₄ = output_constraints_acas(weights, "weak left", net_dict=net_dict)
+# Aₒ₅, bₒ₅ = output_constraints_acas(weights, "strong left", net_dict=net_dict)
 
-state2input, state2output, state2map, state2backward = forward_reach(weights, Aᵢ, bᵢ, [Aₒ₁, Aₒ₂, Aₒ₃, Aₒ₄, Aₒ₅], [bₒ₁, bₒ₂, bₒ₃, bₒ₄, bₒ₅], reach=false, back=true, verification=false)
-for i in 1:length(state2backward)
-	@show length(state2backward[i])
-end
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ₁, Aₒ₂, Aₒ₃, Aₒ₄, Aₒ₅], [bₒ₁, bₒ₂, bₒ₃, bₒ₄, bₒ₅], reach=false, back=true, verification=false)
+# for i in 1:length(state2backward)
+# 	@show length(state2backward[i])
+# end
 
 
 

@@ -478,7 +478,7 @@ end
 # Given input point and weights return state2input, state2output, state2map, plt_in, plt_out
 # set reach=false for just cell enumeration
 # Supports looking for multiple backward reachable sets at once
-function forward_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
+function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
 	# Construct necessary data structures #
 	state2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A,b) input constraints
 	state2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A′,b′) ouput constraints
@@ -496,14 +496,14 @@ function forward_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	num_neurons = sum([length(state[layer]) for layer in 1:length(state)])
 	
 	# Begin cell enumeration #
-	i, saved_lps, solved_lps, singular_maps = (1, 0, 0, 0)
+	i, saved_lps, solved_lps, rank_deficient = (1, 0, 0, 0)
 	while !isempty(working_set)
 		println(i)
 		state = pop!(working_set)
 
 		# Get local affine_map
 		C, d = local_map(state, weights)
-		rank(C) != length(d) ? singular_maps += 1 : nothing
+		rank(C) != length(d) ? rank_deficient += 1 : nothing
 		state2map[state] = (C,d)
 
 		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, state, num_neurons)
@@ -540,7 +540,7 @@ function forward_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end
 	verification ? println("No input maps to the target set.") : nothing
-	println("Singular maps: ", singular_maps)
+	println("Rank deficient maps: ", rank_deficient)
 	total_lps = saved_lps + solved_lps
 	println("Total solved LPs: ", solved_lps)
 	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
