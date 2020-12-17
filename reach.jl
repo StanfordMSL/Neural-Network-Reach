@@ -2,6 +2,8 @@ using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib
 include("load_networks.jl")
 include("unique_custom.jl")
 
+ϵ = 1e-10 # used for numerical tolerances throughout
+
 ### GENERAL PURPOSE FUNCTIONS ###
 function normalize_row(row::Vector{Float64}; return_zero=false)
 	for i in 1:length(row)
@@ -29,7 +31,7 @@ function get_state(input, weights)
 	layer_vals = vcat(input, [1])
 	for layer in 1:L-1 # No ReLU on last layer
 		layer_vals = max.(0, weights[layer]*layer_vals)
-		state[layer] = layer_vals .> 1e-10
+		state[layer] = layer_vals .> ϵ
 	end
 	return state
 end
@@ -102,7 +104,7 @@ function get_constraints(weights::Vector{Matrix{Float64}}, state::Vector{BitVect
 		output = weights[layer]*lin_map
 		for neuron in 1:length(state[layer])
 			A[i,:] = (1-2*state[layer][neuron])*output[neuron,:]
-			if !isapprox(A[i,1:end-1], zeros(size(A,2)-1), atol=1e-10) # check nonzero.
+			if !isapprox(A[i,1:end-1], zeros(size(A,2)-1), atol=ϵ) # check nonzero.
 				A[i,:] = normalize_row(A[i,:])
 			else
 				push!(zerows, i)
@@ -182,11 +184,11 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 	# Find redundant constraints
 	for i in unique_nonzerow_indices
 		val = sum([A[i,j] > 0 ? A[i,j]*bounds[j,2] : A[i,j]*bounds[j,1] for j in 1:size(A,2)])
-		val + 1e-10 < b[i]  ? push!(redundant,i) : nothing
+		val + ϵ < b[i]  ? push!(redundant,i) : nothing
 	end
 	for i in length(bᵢ)
 		val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in 1:size(Aᵢ,2)])
-		val + 1e-10 < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
+		val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
 	end
 	return redundant, redundantᵢ
 end
@@ -207,7 +209,7 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 		optimize!(model)
 		if termination_status(model) == MOI.OPTIMAL
 
-			if objective_value(model) > b[i] + 1e-10 # 1e-15 is too small.
+			if objective_value(model) > b[i] + ϵ # 1e-15 is too small.
 				push!(essential, i)
 			end
 		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
@@ -226,7 +228,7 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 		k > 1 ? set_normalized_rhs(conₛ[unknown_setᵢ[k-1]], bᵢ[unknown_setᵢ[k-1]]) : nothing # un-relax i-1 constraint
 		optimize!(model)
 		if termination_status(model) == MOI.OPTIMAL
-			if objective_value(model) > bᵢ[i] + 1e-10
+			if objective_value(model) > bᵢ[i] + ϵ
 				push!(essentialᵢ, i)
 			end
 		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
@@ -269,7 +271,6 @@ function find_neighbors(state::Vector{BitVector}, neighbor_indices::Vector{Int64
 			push!(neighbors, neighbor_state)
 		end
 	end 
-
 	return neighbors
 end
 
@@ -297,7 +298,7 @@ function type1!(set, neighbor_state, weights)
 		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
 		new_constraint = -(1-2*neighbor_state[layer][neuron])*neuron_map(layer, neuron, neighbor_state, weights) # flipped
 
-		if isapprox(new_constraint, zeros(length(new_constraint)), atol=1e-10 ) # sometimes previous flipping leads to zerow
+		if isapprox(new_constraint, zeros(length(new_constraint)), atol=ϵ ) # sometimes previous flipping leads to zerow
 			neighbor_state[layer][neuron] = 0
 		else
 			neighbor_state[layer][neuron] = !neighbor_state[layer][neuron]
@@ -311,11 +312,8 @@ function type3!(set, neighbor_state, weights, neighbor_constraint)
 	for neuron_idx in set # Type 3 neurons
 		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
 		new_constraint = -neuron_map(layer, neuron, neighbor_state, weights) # negative because testing 0->1 flip
-		if !isapprox(new_constraint, zeros(length(new_constraint)), atol=1e-10 )
+		if !isapprox(new_constraint, zeros(length(new_constraint)), atol=ϵ )
 			neighbor_state[layer][neuron] = 1
-			# if isapprox(normalize_row(new_constraint), neighbor_constraint, atol=1e-10 )
-			# 	neighbor_state[layer][neuron] = 1
-			# end
 		end
 	end
 	return neighbor_state
@@ -369,7 +367,6 @@ function affine_map(A,b,C,d)
 
 	xdim = size(A,2)
 	ydim = size(C,1)
-
 	A′ = vcat( hcat(-C, I), hcat(C, -I), hcat(A, zeros(length(b), ydim)) )
 	b′ = vcat(d, -d, b)
 
@@ -483,7 +480,6 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	state2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A,b) input constraints
 	state2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A′,b′) ouput constraints
 	state2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
-	# state2backward = Vector{ Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}} }(Dict(), length(Aₒ)) # Dict from state -> (A_back,b_back) backward reachable constraints
 	state2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (C,d) local affine map
 	state2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from state to neuron indices we know are essential
 	working_set = Set{Vector{BitVector}}() # Network states we want to explore
@@ -520,8 +516,9 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 			end
 		end
 		
-		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
-		check_state(center, weights, state)
+		# Uncomment these lines to double check generated state is correct
+		# center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
+		# check_state(center, weights, state)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, state2essential[state])
 		working_set, state2essential = add_neighbor_states(state, neighbor_indices, working_set, idx2repeat, zerows, weights, state2essential)

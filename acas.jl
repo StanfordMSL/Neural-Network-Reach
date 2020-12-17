@@ -2,6 +2,7 @@ using BenchmarkTools
 include("reach.jl")
 
 ### INPUT CONSTRAINT FUNCTIONS ###
+# Returns H-rep of various input sets
 # acas properties defined in original reluplex paper appendix
 # For neural networks we often normalize the data before input to the network.
 # This normalization is an affine map: x_net = (x - x_mean) ./ x_std --> x = Cx_net + d where C = Diagonal(x_std), d = x_mean
@@ -48,6 +49,7 @@ function input_constraints_acas(weights, type::String; net_dict=[])
 	return Aᵢ, bᵢ
 end
 
+# Returns H-rep of various output sets
 function output_constraints_acas(weights, type::String; net_dict=[])
 	if type == "acas property 3" || type == "acas property 4" || type == "COC"
 		A = [1 -1 0 0 0;

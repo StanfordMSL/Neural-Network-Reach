@@ -5,7 +5,8 @@ https://arxiv.org/abs/2011.11609
 ```
 
 ## Requirements ##
-- Julia xxx
+- Julia 1.4
+- See Project.toml
 
 ## Installation ##
 Clone the repository in the desired location:
@@ -18,6 +19,7 @@ julia
 (@v1.4) pkg> activate .
 (Neural-Network-Reach) pkg> instantiate
 ```
+This creates a Julia environment for the package and sets up all the needed packages.
 
 ## Examples ##
 ### Dampled Pendulum Example ###
@@ -34,7 +36,7 @@ In ```acas.jl``` the following should be specified:
 
 ### Random Network Example ###
 In ```random.jl``` the following should be specified:
-- ```test_random_flux(2, 2, 50, 3)```: Arguments are input dim, output dim, hidden layer dim, num layers.
+- ```test_random_flux(a, b, c, d)```: Arguments are input dim, output dim, hidden layer dim, num layers.
 - keyword arguments of ```compute_reach()```: Specify whether to compute forward and/or backward reachable sets and/or solve a verification problem.
 
 ### Loading a Network ###

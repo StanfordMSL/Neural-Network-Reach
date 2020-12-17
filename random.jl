@@ -1,10 +1,7 @@
 using Plots
 include("reach.jl")
-# pyplot()
-# using PyPlot
 
-bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,b]
-
+# Returns H-rep of various input sets
 function input_constraints_random(weights, type::String; net_dict=[])
 	if type == "big box"
 		in_dim = size(weights[1],2) - 1
@@ -65,4 +62,4 @@ end
 @show length(state2input)
 
 # Plot all regions (only 2D input) #
-plt_in  = plot_hrep_random(state2input, space="input")
+# plt_in  = plot_hrep_random(state2input, space="input")
