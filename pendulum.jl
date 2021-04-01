@@ -16,7 +16,7 @@ function input_constraints_pendulum(weights, type::String; net_dict=[])
 		Aᵢ_pos = Matrix{Float64}(I, in_dim, in_dim)
 		Aᵢ_neg = Matrix{Float64}(-I, in_dim, in_dim)
 		Aᵢ = vcat(Aᵢ_pos, Aᵢ_neg)
-		bᵢ = 0.25*ones(2*in_dim)
+		bᵢ = 0.01*ones(2*in_dim)
 	elseif type == "hexagon"
 		Aᵢ = [1 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
 		bᵢ = [5, 5, 5, 5, 8, 8, 8, 8]
@@ -71,7 +71,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-copies = 20 # copies = 0 is original network
+copies = 10 # copies = 0 is original network
 model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
 
 weights, net_dict = pendulum_net(model, copies)

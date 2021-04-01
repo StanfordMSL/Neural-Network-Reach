@@ -95,7 +95,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-weights, net_dict = acas_net(5,7) # specify which acas network to analyze, acas_net(1:5,1:9)
+weights, net_dict = acas_net(1,1) # specify which acas network to analyze, acas_net(1:5,1:9)
 property = "acas property 3"
 Aᵢ, bᵢ = input_constraints_acas(weights, property, net_dict=net_dict)
 Aₒ, bₒ = output_constraints_acas(weights, property, net_dict=net_dict)
