@@ -367,7 +367,7 @@ function affine_map(A,b,C,d)
 
 	xdim = size(A,2)
 	ydim = size(C,1)
-	A′ = vcat( hcat(-C, I), hcat(C, -I), hcat(A, zeros(length(b), ydim)) )
+	A′ = vcat( hcat(I, -C), hcat(-I, C), hcat(zeros(length(b), ydim), A) )
 	b′ = vcat(d, -d, b)
 
 	poly_in = polyhedron(hrep(A′,b′), CDDLib.Library(:float))
@@ -378,14 +378,17 @@ function affine_map(A,b,C,d)
 	numcol = ine.colsize
 	Aₒ = Matrix{Float64}(undef, numrow, numcol-1)
 	bₒ = Vector{Float64}(undef, numrow)
+	good_idxs = []
 	for i in 1:numrow
 		row = unsafe_load(ine.matrix, i)
+		bₒ[i] = unsafe_load(row, 1)
 		for j in 1:numcol-1
-			Aₒ[i,j] = unsafe_load(row, j)
+			Aₒ[i,j] = -unsafe_load(row, j+1)
 		end
-		bₒ[i] = unsafe_load(row, numcol)
+		Aₒ[i,:] != zeros(numcol-1) ? push!(good_idxs, i) : nothing
 	end
-	return Aₒ, bₒ
+
+	return Aₒ[good_idxs,:], bₒ[good_idxs]
 end
 
 
