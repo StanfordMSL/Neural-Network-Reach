@@ -151,7 +151,12 @@ function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential)
 	saved_lps = length(essential)+length(essentialᵢ) + length(redundant)+length(redundantᵢ)-2*size(A,2)
 	solved_lps = 2*size(A,2) + length(unknown_set) + length(unknown_setᵢ)
 
-	return vcat(A[essential,:], Aᵢ[essentialᵢ,:]), vcat(b[essential], bᵢ[essentialᵢ]), sort(essential), saved_lps, solved_lps
+	if bᵢ != []
+		return vcat(A[essential,:], Aᵢ[essentialᵢ,:]), vcat(b[essential], bᵢ[essentialᵢ]), sort(essential), saved_lps, solved_lps
+	else
+		return A[essential,:], b[essential], sort(essential), saved_lps, solved_lps
+	end
+
 end
 
 # Heuristic for finding redundant constraints: finds upper and lower bounds for each component of x given Ax≤b
@@ -163,7 +168,7 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 	presolve ? set_optimizer_attribute(model, "presolve", 1) : nothing
 	@variable(model, x[1:size(A,2)])
 	@constraint(model, A[unique_nonzerow_indices,:]*x .<= b[unique_nonzerow_indices])
-	@constraint(model, Aᵢ*x .<= bᵢ)
+	bᵢ != [] ? @constraint(model, Aᵢ*x .<= bᵢ) : nothing
 	@constraint(model, x[1:size(A,2)] .<= 1e8*ones(size(A,2)))  # to keep bounded
 	@constraint(model, x[1:size(A,2)] .>= -1e8*ones(size(A,2))) # to keep bounded
 	for i in 1:size(A,2)
@@ -186,9 +191,11 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 		val = sum([A[i,j] > 0 ? A[i,j]*bounds[j,2] : A[i,j]*bounds[j,1] for j in 1:size(A,2)])
 		val + ϵ < b[i]  ? push!(redundant,i) : nothing
 	end
-	for i in length(bᵢ)
-		val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in 1:size(Aᵢ,2)])
-		val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
+	if bᵢ != []
+		for i in length(bᵢ)
+			val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in 1:size(Aᵢ,2)])
+			val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
+		end
 	end
 	return redundant, redundantᵢ
 end
@@ -200,7 +207,7 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 	presolve ? set_optimizer_attribute(model, "presolve", 1) : nothing
 	@variable(model, x[1:size(A,2)])
 	@constraint(model, con[j in non_redundant], dot(A[j,:],x) <= b[j])
-	@constraint(model, conₛ[j in non_redundantᵢ], dot(Aᵢ[j,:],x) <= bᵢ[j]) # tack on non-redundant superset constraints
+	bᵢ != [] ? @constraint(model, conₛ[j in non_redundantᵢ], dot(Aᵢ[j,:],x) <= bᵢ[j]) : nothing # tack on non-redundant superset constraints
 
 	for (k,i) in enumerate(unknown_set)
 		@objective(model, Max, dot(A[i,:],x))
@@ -221,22 +228,24 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 		end
 	end
 
-	# Brute force LP method on superset constraints#
-	for (k,i) in enumerate(unknown_setᵢ)
-		@objective(model, Max, dot(Aᵢ[i,:],x))
-		set_normalized_rhs(conₛ[i], bᵢ[i]+100) # relax ith constraint
-		k > 1 ? set_normalized_rhs(conₛ[unknown_setᵢ[k-1]], bᵢ[unknown_setᵢ[k-1]]) : nothing # un-relax i-1 constraint
-		optimize!(model)
-		if termination_status(model) == MOI.OPTIMAL
-			if objective_value(model) > bᵢ[i] + ϵ
-				push!(essentialᵢ, i)
+	if bᵢ != []
+		# Brute force LP method on superset constraints#
+		for (k,i) in enumerate(unknown_setᵢ)
+			@objective(model, Max, dot(Aᵢ[i,:],x))
+			set_normalized_rhs(conₛ[i], bᵢ[i]+100) # relax ith constraint
+			k > 1 ? set_normalized_rhs(conₛ[unknown_setᵢ[k-1]], bᵢ[unknown_setᵢ[k-1]]) : nothing # un-relax i-1 constraint
+			optimize!(model)
+			if termination_status(model) == MOI.OPTIMAL
+				if objective_value(model) > bᵢ[i] + ϵ
+					push!(essentialᵢ, i)
+				end
+			elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
+				return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, presolve=true)
+			else
+				@show termination_status(model)
+				println("Dual infeasible implies that primal is unbounded.")
+				error("Suboptimal LP constraint check!")
 			end
-		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
-			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, presolve=true)
-		else
-			@show termination_status(model)
-			println("Dual infeasible implies that primal is unbounded.")
-			error("Suboptimal LP constraint check!")
 		end
 	end
 	return essential, essentialᵢ
