@@ -523,8 +523,8 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		end
 		
 		# Uncomment these lines to double check generated state is correct
-		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
-		check_state(center, weights, state)
+		# center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
+		# check_state(center, weights, state)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, state2essential[state])
 		working_set, state2essential = add_neighbor_states(state, neighbor_indices, working_set, idx2repeat, zerows, weights, state2essential)
