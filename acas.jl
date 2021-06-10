@@ -1,4 +1,3 @@
-using BenchmarkTools
 include("reach.jl")
 
 ### INPUT CONSTRAINT FUNCTIONS ###
@@ -8,9 +7,12 @@ include("reach.jl")
 # This normalization is an affine map: x_net = (x - x_mean) ./ x_std --> x = Cx_net + d where C = Diagonal(x_std), d = x_mean
 # We can then take our original input constraint, Ax≤b and substitute the above identity so it is properly defined in light of normalization: A(Cx_net + d)≤b
 function input_constraints_acas(weights, type::String; net_dict=[])
+	# Each input specification is in the form Ax≤b
+	# The network takes normalized inputs: xₙ = Aᵢₙx + bᵢₙ
+	# Thus the input constraints for raw network inputs is: A*inv(Aᵢₙ)x ≤ b + A*inv(Aᵢₙ)*bᵢₙ
 	# ACAS input  = [ρ, θ, ψ, v_own, v_int]
 	if type == "acas property 3"
-		A = [-1  0  0  0  0; # ρ
+		A = [ -1  0  0  0  0; # ρ
 			   1  0  0  0  0; # ρ
 			   0 -1  0  0  0; # θ
 			   0  1  0  0  0; # θ
@@ -21,36 +23,18 @@ function input_constraints_acas(weights, type::String; net_dict=[])
 			   0  0  0  0 -1; # v_int
  			   0  0  0  0  1] # v_int
  		b = [-1500, 1800, 0.06, 0.06, -3.1, 3.14, -980, 1200, -960, 1200]
-		σ = Diagonal(vec(net_dict["range_for_scaling"][1:end-1]))
-		μ = vec(net_dict["means_for_scaling"][1:end-1])
-		Aᵢ = A*σ
-		bᵢ = b - A*μ
-
-	elseif type == "acas property 4"
-		A = [-1  0  0  0  0; # ρ
-			   1  0  0  0  0; # ρ
-			   0 -1  0  0  0; # θ
-			   0  1  0  0  0; # θ
-			   0  0 -1  0  0; # ψ
-			   0  0  1  0  0; # ψ
-			   0  0  0 -1  0; # v_own
-			   0  0  0  1  0; # v_own
-			   0  0  0  0 -1; # v_int
- 			   0  0  0  0  1] # v_int
- 		b = [-1500, 1800, 0.06, 0.06, 0.0, 0.0, -1000, 1200, -700, 800]
-		σ = Diagonal(vec(net_dict["range_for_scaling"][1:end-1]))
-		μ = vec(net_dict["means_for_scaling"][1:end-1])
-		Aᵢ = A*σ
-		bᵢ = b - A*μ
-	
 	else
 		error("Invalid input constraint specification.")
 	end
-	return Aᵢ, bᵢ
+	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
+	return A*inv(Aᵢₙ), b + A*inv(Aᵢₙ)*bᵢₙ
 end
 
 # Returns H-rep of various output sets
 function output_constraints_acas(weights, type::String; net_dict=[])
+	# Each output specification is in the form Ay≤b
+	# The network takes normalized inputs: yₒᵤₜ = Aₒᵤₜy + bₒᵤₜ
+	# Thus the output constraints for raw network outputs is: A*inv(Aₒᵤₜ)y ≤ b + A*inv(Aₒᵤₜ)*bₒᵤₜ
 	if type == "acas property 3" || type == "acas property 4" || type == "COC"
 		A = [1 -1 0 0 0;
 			 1 0 -1 0 0;
@@ -82,20 +66,17 @@ function output_constraints_acas(weights, type::String; net_dict=[])
 			 0 0 0 -1 1]
  		b = [0, 0, 0, 0]
  	else 
- 		error("Invalid input constraint specification.")
+ 		error("Invalid output constraint specification.")
  	end
- 	σ = net_dict["range_for_scaling"][end]
-	μ = net_dict["means_for_scaling"][end]
-	Aₒ = σ*A
-	bₒ = b - A*μ*ones(size(A,2))
- 	return Aₒ, bₒ
+ 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+ 	return A*inv(Aₒᵤₜ), b + A*inv(Aₒᵤₜ)*bₒᵤₜ
 end
 
 
 ###########################
 ######## SCRIPTING ########
 ###########################
-weights, net_dict = acas_net(5,8) # specify which acas network to analyze, acas_net(1:5,1:9)
+weights, nnet, net_dict = acas_net_nnet(5,7)
 property = "acas property 3"
 Aᵢ, bᵢ = input_constraints_acas(weights, property, net_dict=net_dict)
 Aₒ, bₒ = output_constraints_acas(weights, property, net_dict=net_dict)

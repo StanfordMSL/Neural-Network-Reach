@@ -51,7 +51,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-flux_net, weights = test_random_flux(3, 3, 5, 5) # (in_d, out_d, hdim, layers; Aₒ=[], bₒ=[], value=false)
+weights = random_net(3, 3, 5, 5) # (in_d, out_d, hdim, layers; Aₒ=[], bₒ=[], value=false)
 Aᵢ, bᵢ = input_constraints_random(weights, "big box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
