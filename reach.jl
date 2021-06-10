@@ -258,30 +258,16 @@ end
 
 
 ### FUNCTIONS FOR FINDING NEIGHBORS ###
-function find_neighbors(state::Vector{BitVector}, neighbor_indices::Vector{Int64}, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, visited)
-	neighbors = Set{Vector{BitVector}}()
-	for idx in neighbor_indices
-		neighbor_state = deepcopy(state)
-		neighbor_constraint = -normalize_row(neuron_map(get_layer_neuron(idx, neighbor_state)..., neighbor_state, weights))
-
-		neighbor_state = type1!(idx2repeat[idx], neighbor_state, weights)
-		neighbor_state = type3!(zerows, neighbor_state, weights, neighbor_constraint)
-
-		if neighbor_state ∉ visited # check if we've already visited
-			push!(neighbors, neighbor_state)
-		end
-	end 
-	return neighbors
-end
-
 # Adds neighbor states to working_set
 function add_neighbor_states(state::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, state2essential)	
 	for idx in neighbor_indices
 		neighbor_state = deepcopy(state)
-		neighbor_constraint = -normalize_row(neuron_map(get_layer_neuron(idx, neighbor_state)..., neighbor_state, weights))
+		l, n = get_layer_neuron(idx, neighbor_state)
+		neighbor_constraint = -(1-2*neighbor_state[l][n])*normalize_row(neuron_map(l, n, neighbor_state, weights)) # constraint for c′
 
-		neighbor_state = type1!(idx2repeat[idx], neighbor_state, weights)
-		neighbor_state = type3!(zerows, neighbor_state, weights, neighbor_constraint)
+		type1 = idx2repeat[idx]
+		type2 = zerows
+		neighbor_state = flip_neurons!(type1, type2, neighbor_state, weights, neighbor_constraint)
 
 		if !haskey(state2essential, neighbor_state) && neighbor_state ∉ working_set
 			push!(working_set, neighbor_state)
@@ -292,32 +278,49 @@ function add_neighbor_states(state::Vector{BitVector}, neighbor_indices::Vector{
 	return working_set, state2essential
 end
 
-# Handle flipping for type 1 neurons
-function type1!(set, neighbor_state, weights)
-	for neuron_idx in set # Type 1 neurons
-		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
-		new_constraint = -(1-2*neighbor_state[layer][neuron])*neuron_map(layer, neuron, neighbor_state, weights) # flipped
 
-		if isapprox(new_constraint, zeros(length(new_constraint)), atol=ϵ ) # sometimes previous flipping leads to zerow
-			neighbor_state[layer][neuron] = 0
+# Handles flipping of activation pattern from c to c′
+function flip_neurons!(type1, type2, neighbor_state, weights, neighbor_constraint)
+	# neuron_idx = what number neuron with top neuron first layer = 1 and bottom neuron last layer = end
+	a, b = neighbor_constraint[1:end-1], -neighbor_constraint[end] # a⋅x ≤ b for c′
+
+	for neuron_idx in sort(vcat(type1, type2))
+		l, n = get_layer_neuron(neuron_idx, neighbor_state)
+		new_map = (1-2*neighbor_state[l][n])*normalize_row(neuron_map(l, n, neighbor_state, weights))
+		a′, b′ = new_map[1:end-1], -new_map[end] 
+		
+		# now we check whether a′⋅x ≤ b′ is valid, or if we need to flip the activation such that a′⋅x ≥ b′
+		if isapprox(a′, zeros(length(a′)), atol=ϵ )
+			if b′ ≥ 0 # ⟹ 0⋅x ≤ b′ is then always satisfied, thus valid
+				nothing
+			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
+				neighbor_state[l][n] = !neighbor_state[l][n]
+			end 
+		elseif neuron_idx in type1
+			neighbor_state[l][n] = !neighbor_state[l][n]
+		# we know that a⋅x = b must be a subset of the new constraint set to be valid
+		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ≥0 (where b′ = b + Δ, Δ≥0) ⟹ a⋅x = b + Δ -s && Δ≥0 && s≥0 ⟹ a⋅x = b is satisfied for s = Δ, thus valid
+			nothing
+		elseif isapprox(a′, a, atol=ϵ ) && b′ < b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ<0 (where b′ = b + Δ, Δ<0) ⟹ a⋅x = b + Δ -s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+			neighbor_state[l][n] = !neighbor_state[l][n]
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≤ b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ≥0 (where -b′ = b - Δ, Δ≥0) ⟹ a⋅x = b - Δ + s && Δ≥0 && s≥0 ⟹ a⋅x = b for s = Δ, thus valid
+			nothing
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ > b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ<0 (where -b′ = b - Δ, Δ<0) ⟹ a⋅x = b - Δ + s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+			neighbor_state[l][n] = !neighbor_state[l][n]
 		else
-			neighbor_state[layer][neuron] = !neighbor_state[layer][neuron]
+			error("Check neuron flipping rules.")
 		end
 	end
+
 	return neighbor_state
 end
 
-# Handle flipping for type 3 neurons
-function type3!(set, neighbor_state, weights, neighbor_constraint)
-	for neuron_idx in set # Type 3 neurons
-		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
-		new_constraint = -neuron_map(layer, neuron, neighbor_state, weights) # negative because testing 0->1 flip
-		if !isapprox(new_constraint, zeros(length(new_constraint)), atol=ϵ )
-			neighbor_state[layer][neuron] = 1
-		end
-	end
-	return neighbor_state
-end
+
+
+
+
+
+
 
 
 
@@ -520,8 +523,8 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		end
 		
 		# Uncomment these lines to double check generated state is correct
-		# center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
-		# check_state(center, weights, state)
+		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
+		check_state(center, weights, state)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, state2essential[state])
 		working_set, state2essential = add_neighbor_states(state, neighbor_indices, working_set, idx2repeat, zerows, weights, state2essential)
@@ -536,7 +539,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 				end
 			end
 		end
-		
+
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end
 	verification ? println("No input maps to the target set.") : nothing
