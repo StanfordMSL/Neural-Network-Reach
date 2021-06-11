@@ -1,3 +1,6 @@
+using LinearAlgebra, MatrixEquations
+
+# Return true if x ∈ {x | Ax ≤ b}, otherwise return false
 function in_polytope(x, A, b)
 	for i in 1:length(b)
 		A[i,:]⋅x > b[i] ? (return false) : nothing
@@ -5,35 +8,83 @@ function in_polytope(x, A, b)
 	return true
 end
 
-function compute_traj(init, steps::Int64, net_dict)
-	t = collect(0:0.1:0.1*steps) # make sure this is the right dt
-	state_traj = zeros(2,length(t))
+# Return trajectory of discrete time system where each column is the state at step i
+# Julia arrays are stored in column-major order so it's faster to do matrix[:,i] = data rather than matrix[i,:] = data
+function compute_traj(init, steps::Int64, net_dict; dt=0.1)
+	t = collect(0:dt:dt*steps)
+	state_traj = Matrix{Float64}(undef, net_dict["input_size"], length(t))
 	state_traj[:,1] = init
 	for i in 2:length(t)
-		state_traj[:,i] = eval_net(state_traj[:,i-1], net_dict, 0)
+		state_traj[:,i] = eval_net(state_traj[:,i-1], weights, net_dict, 0)
 	end
 	return state_traj
 end
 
+# Specific for the pendulum
 function plot_traj(state_traj)
 	plt = plot(reuse = false)
 	plot!(plt, t, rad2deg.(state_traj[1,:]), linewidth=3, legend=false, xlabel="Time (s.)", ylabel="Angle (deg.)", fontfamily=font(14, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 	return plt
 end
 
-function find_fixed_points(state2map)
+# Iterate through each cell cᵢ in a PWA function and find fixed points if they exist.
+# The raw neural network has affine functions: ỹ = Cx̃ + d
+# The networks inputs and outputs are normalized/unnormalized as: x̃ = Aᵢₙx + bᵢₙ, y = Aₒᵤₜỹ + bₒᵤₜ
+# Thus, y = Aₒᵤₜ(C(Aᵢₙx + bᵢₙ) + d) + bₒᵤₜ = Aₒᵤₜ(CAᵢₙx + Cbᵢₙ + d) + bₒᵤₜ = AₒᵤₜCAᵢₙx + AₒᵤₜCbᵢₙ + Aₒᵤₜd + bₒᵤₜ
+# ⟹ C̄ = AₒᵤₜCAᵢₙ, d̄ = AₒᵤₜCbᵢₙ + Aₒᵤₜd + bₒᵤₜ
+# Fixed point p satisfies: C̄p + d̄ = p ⟹ (I - C̄)p = d̄.
+# p must lie in the polytope for which the affine map is valid
+# The raw neural network has polytopes Ax̄ ≤ b  ⟹  A(Aᵢₙx + bᵢₙ) ≤ b  ⟹  AAᵢₙx ≤ b - Abᵢₙ  ⟹  Ā = AAᵢₙ, b̄ = b - Abᵢₙ
+function find_fixed_points(state2map, state2input, net_dict)
+	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
+	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+	dim = net_dict["input_size"]
 	fixed_points = Vector{Vector{Float64}}(undef, 0)
-
+	fp_dict = Dict{ Vector{Float64}, Vector{Tuple{Matrix{Float64},Vector{Float64}}} }() # stores [(Ā, b̄), (C̄, d̄)]
 	for ap in keys(state2map)
 		C, d = state2map[ap]
 		A, b = state2input[ap]
-		p = inv(I - C) * d # make more general for rank deficient cases
-		if in_polytope(p, A, b)
-			push!(fixed_points, p) # fixed
+		C̄ = Aₒᵤₜ*C*Aᵢₙ
+		d̄ = Aₒᵤₜ*C*bᵢₙ + Aₒᵤₜ*d + bₒᵤₜ
+		Ā = A*Aᵢₙ
+		b̄ = b - A*bᵢₙ
+
+		if rank(I - C̄) == dim
+			p = inv(I - C̄) * d̄
+			if in_polytope(p, Ā, b̄)
+				push!(fixed_points, p)
+				fp_dict[p] = [(Ā, b̄), (C̄, d̄)]
+			end
+		else
+			error("Non-unique fixed point! Make more general")
 		end
 	end
-	return fixed_points
+	return fixed_points, fp_dict
 end
+
+# Find local quadratic Lyapunov function of the form: x'Qx + r'x + constant
+function local_stability(p, fp_dict)
+	region = fp_dict[p]
+	A, b = region[1]
+	C, d = region[2]
+	dim = length(d)
+	F = eigen(C)
+	if all(norm.(F.values) .< 1) # then stable
+		# Transform affine sytem to linear system:
+		# xₜ₊₁ = Cxₜ + d,  x_ₜ = xₜ + inv(C)*d  ⟹ x_ₜ₊₁ = Cx_ₜ
+		# local Lyapunov function: x_'*Q*x_ = x'*Q*x + 2*d'*inv(C)*Q + constant
+		Q = lyapd(C, Matrix{Float64}(I, dim, dim)) # 2nd arg is symmetric. Where does it come from?
+		r = 2*d'*inv(C)*Q
+	else
+		error("Unstable local system.")
+	end
+	return Q, r
+end
+
+
+
+
+
 
 # Find an i-step invariant set given a fixed point p
 function i_step_invariance(fixed_point, max_steps)
@@ -69,127 +120,3 @@ function i_step_invariance(fixed_point, max_steps)
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## mp-LP ##
-
-
-
-
-
-
-
-
-# mat"""
-# % printing parameters
-# label_font_size = 14;
-# tick_font_size = 10;
-# line_width = 0.8;
-# axeswidth=0.2;
-# figure_name = ['.',filesep,'figures',filesep,'ex5_2'];
-# % use laprint to produce pictures
-# set(0,'defaulttextinterpreter','none')
-# width = 10;
-
-# % core code
-# % matrices of MPLP formulation G*x <= w + S*th
-# G=zeros(12,4);
-# w=zeros(12,1);
-# S=zeros(12,2);
-# G(1,1)=-1;
-# G(2,1)=-1;
-# G(2,3)=-1;
-# G(3,1)=-1;
-# G(4,1)=-1;
-# G(4,3)=+1;
-# G(5,2:3)=[-1 -1];
-# G(6,2:4)=[-1 -1 -1];
-# G(7,2:3)=[-1 1];
-# G(8,2:4)=[-1 1 1];
-# G(9,3)=1;
-# G(10,3)=-1;
-# G(11,4)=1;
-# G(12,4)=-1;
-# w(9:12)=[1;1;1;1];
-# S(1,:)=[1 1];
-# S(2,:)=[0 1];
-# S(3,:)=[-1 -1];
-# S(4,:)=[0 -1];
-# S(5,:)=[1 2];
-# S(6,:)=[0 1];
-# S(7,:)=[-1 -2];
-# S(8,:)=[0 -1];
-# Ath = [eye(2); -eye(2)]; bth = 2.5*ones(4,1); 
-
-# % formulate MPLP, min f'*x s.t. A*x <= b + pB*th, Ath*th <= bth
-# problem = Opt('f',[1 1 0 0],'A',G,'b',w,'pB',S,'Ath',Ath,'bth',bth);
-# solution=problem.solve; 
-
-# % plot partition
-# figure 
-# hold on
-# plot(solution.xopt,'linewidth',0.8,'wirestyle','--','color',[0.9 0.9 0.9])
-# grid on
-
-# % list active sets
-# for j=1:length(solution.xopt.Set)
-#     % get a point inside each polytope
-#     chebC=solution.xopt.Set(j).chebyCenter;
-    
-#     % solve optimization problem for a fixed point to get the active set
-#     problem_fixed = Opt('f',[1 1 0 0],'A',G,'b',w+S*chebC.x);
-#     solution_fixed=problem_fixed.solve;
-    
-#     % display active set
-# %     disp(['Active set in Region ',num2str(j),' is:'])
-# %     ActiveSet=find(G*solution_fixed.xopt-(w+S*chebC.x)>=-1e-10);
-# %     ActiveSet'
-#     % nonzero Lagrange multpliers for inequality constraints 
-# %     lam = solution.xopt.feval(chebC.x, 'dual-ineqlin')';
-# %     find(lam >= 1e-10)
-    
-#     % cost function is stored as x = F*th + g
-# %     disp(['Cost function is in Region ',num2str(j),' is:'])
-# %     [solution.xopt.Set(j).getFunction('obj').F solution.xopt.Set(j).getFunction('obj').g]
-#     ht3 = text(chebC.x(1)-0.1,chebC.x(2),num2str(j));
-#     set(ht3, 'FontSize', label_font_size);
-# end
-
-
-# % save book figures
-# % font size of tick labels
-# set(gca,'LineWidth',axeswidth)
-# set(gca,'FontSize', tick_font_size);
-
-# title('')
-# hx=xlabel('x_1');
-# set(hx, 'FontSize', label_font_size);
-# hy=ylabel('x_2');
-# set(hy, 'FontSize', label_font_size);
-
-
-# xl = transpose([-2.5,2.5]);
-# yl = transpose([-2.5,2.5]);
-# set(gca,'XTick',xl);
-# set(gca,'YTick',yl);
-# set(gca,'XTickLabel',num2str(xl));
-# set(gca,'YTickLabel',num2str(yl));
-# """
