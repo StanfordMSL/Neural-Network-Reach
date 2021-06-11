@@ -24,24 +24,24 @@ function get_input(Aᵢ, bᵢ)
 	return input
 end
 
-# Given input point, perform forward pass to get state.
-function get_state(input, weights)
+# Given input point, perform forward pass to get ap.
+function get_ap(input, weights)
 	L = length(weights)
-	state = Vector{BitVector}(undef, L-1)
+	ap = Vector{BitVector}(undef, L-1)
 	layer_vals = vcat(input, [1])
 	for layer in 1:L-1 # No ReLU on last layer
 		layer_vals = max.(0, weights[layer]*layer_vals)
-		state[layer] = layer_vals .> ϵ
+		ap[layer] = layer_vals .> ϵ
 	end
-	return state
+	return ap
 end
 
 # Given constraint index, return associated layer and neuron
-function get_layer_neuron(index, state)
+function get_layer_neuron(index, ap)
 	layer, neuron, prev = (1, 1, 0)
-	for l in 1:length(state)
-		if index > length(state[l]) + prev
-			prev += length(state[l])
+	for l in 1:length(ap)
+		if index > length(ap[l]) + prev
+			prev += length(ap[l])
 		else
 			return l, (index - prev)
 		end
@@ -49,10 +49,10 @@ function get_layer_neuron(index, state)
 end
 
 # Get hyperplane equation associated with a given neuron and input
-function neuron_map(layer, neuron, state, weights; normalize=true)
+function neuron_map(layer, neuron, ap, weights; normalize=true)
 	matrix = I 
 	for l in 1:layer-1
-		matrix = diagm(0 => state[l])*weights[l]*matrix
+		matrix = diagm(0 => ap[l])*weights[l]*matrix
 	end
 	matrix = weights[layer]*matrix
 	if normalize
@@ -62,11 +62,11 @@ function neuron_map(layer, neuron, state, weights; normalize=true)
 	end
 end
 
-# Get affine map associated with a state
-function local_map(state::Vector{BitVector}, weights::Vector{Matrix{Float64}})
+# Get affine map associated with an ap
+function local_map(ap::Vector{BitVector}, weights::Vector{Matrix{Float64}})
 	matrix = I 
 	for l in 1:length(weights)-1
-		matrix = diagm(0 => state[l])*weights[l]*matrix
+		matrix = diagm(0 => ap[l])*weights[l]*matrix
 	end
 	matrix = weights[end]*matrix
 	
@@ -89,7 +89,7 @@ end
 
 ### FUNCTIONS FOR GETTING CONSTRAINTS ###
 # Get redundant A≤b constraints
-function get_constraints(weights::Vector{Matrix{Float64}}, state::Vector{BitVector}, num_neurons)
+function get_constraints(weights::Vector{Matrix{Float64}}, ap::Vector{BitVector}, num_neurons)
 	L = length(weights)
 
 	# Initialize necessary data structures #
@@ -102,8 +102,8 @@ function get_constraints(weights::Vector{Matrix{Float64}}, state::Vector{BitVect
 	i = 1
 	for layer in 1:L-1
 		output = weights[layer]*lin_map
-		for neuron in 1:length(state[layer])
-			A[i,:] = (1-2*state[layer][neuron])*output[neuron,:]
+		for neuron in 1:length(ap[layer])
+			A[i,:] = (1-2*ap[layer][neuron])*output[neuron,:]
 			if !isapprox(A[i,1:end-1], zeros(size(A,2)-1), atol=ϵ) # check nonzero.
 				A[i,:] = normalize_row(A[i,:])
 			else
@@ -111,7 +111,7 @@ function get_constraints(weights::Vector{Matrix{Float64}}, state::Vector{BitVect
 			end
 			i += 1
 		end
-		lin_map = diagm(0 => state[layer])*weights[layer]*lin_map
+		lin_map = diagm(0 => ap[layer])*weights[layer]*lin_map
 	end
 
 	unique_rows, unique_row = unique_custom(A, dims=1)
@@ -267,66 +267,69 @@ end
 
 
 ### FUNCTIONS FOR FINDING NEIGHBORS ###
-function find_neighbors(state::Vector{BitVector}, neighbor_indices::Vector{Int64}, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, visited)
-	neighbors = Set{Vector{BitVector}}()
+# Adds neighbor aps to working_set
+function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential)	
 	for idx in neighbor_indices
-		neighbor_state = deepcopy(state)
-		neighbor_constraint = -normalize_row(neuron_map(get_layer_neuron(idx, neighbor_state)..., neighbor_state, weights))
+		neighbor_ap = deepcopy(ap)
+		l, n = get_layer_neuron(idx, neighbor_ap)
+		neighbor_constraint = -(1-2*neighbor_ap[l][n])*normalize_row(neuron_map(l, n, neighbor_ap, weights)) # constraint for c′
 
-		neighbor_state = type1!(idx2repeat[idx], neighbor_state, weights)
-		neighbor_state = type3!(zerows, neighbor_state, weights, neighbor_constraint)
+		type1 = idx2repeat[idx]
+		type2 = zerows
+		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 
-		if neighbor_state ∉ visited # check if we've already visited
-			push!(neighbors, neighbor_state)
-		end
-	end 
-	return neighbors
-end
-
-# Adds neighbor states to working_set
-function add_neighbor_states(state::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, state2essential)	
-	for idx in neighbor_indices
-		neighbor_state = deepcopy(state)
-		neighbor_constraint = -normalize_row(neuron_map(get_layer_neuron(idx, neighbor_state)..., neighbor_state, weights))
-
-		neighbor_state = type1!(idx2repeat[idx], neighbor_state, weights)
-		neighbor_state = type3!(zerows, neighbor_state, weights, neighbor_constraint)
-
-		if !haskey(state2essential, neighbor_state) && neighbor_state ∉ working_set
-			push!(working_set, neighbor_state)
-			state2essential[neighbor_state] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
+		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set
+			push!(working_set, neighbor_ap)
+			ap2essential[neighbor_ap] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
 		end
 	end 
 
-	return working_set, state2essential
+	return working_set, ap2essential
 end
 
-# Handle flipping for type 1 neurons
-function type1!(set, neighbor_state, weights)
-	for neuron_idx in set # Type 1 neurons
-		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
-		new_constraint = -(1-2*neighbor_state[layer][neuron])*neuron_map(layer, neuron, neighbor_state, weights) # flipped
 
-		if isapprox(new_constraint, zeros(length(new_constraint)), atol=ϵ ) # sometimes previous flipping leads to zerow
-			neighbor_state[layer][neuron] = 0
+# Handles flipping of activation pattern from c to c′
+function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
+	# neuron_idx = what number neuron with top neuron first layer = 1 and bottom neuron last layer = end
+	a, b = neighbor_constraint[1:end-1], -neighbor_constraint[end] # a⋅x ≤ b for c′
+
+	for neuron_idx in sort(vcat(type1, type2))
+		l, n = get_layer_neuron(neuron_idx, neighbor_ap)
+		new_map = (1-2*neighbor_ap[l][n])*normalize_row(neuron_map(l, n, neighbor_ap, weights))
+		a′, b′ = new_map[1:end-1], -new_map[end] 
+		
+		# now we check whether a′⋅x ≤ b′ is valid, or if we need to flip the activation such that a′⋅x ≥ b′
+		if isapprox(a′, zeros(length(a′)), atol=ϵ )
+			if b′ ≥ 0 # ⟹ 0⋅x ≤ b′ is then always satisfied, thus valid
+				nothing
+			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
+				neighbor_ap[l][n] = !neighbor_ap[l][n]
+			end 
+		elseif neuron_idx in type1
+			neighbor_ap[l][n] = !neighbor_ap[l][n]
+		# we know that a⋅x = b must be a subset of the new constraint set to be valid
+		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ≥0 (where b′ = b + Δ, Δ≥0) ⟹ a⋅x = b + Δ -s && Δ≥0 && s≥0 ⟹ a⋅x = b is satisfied for s = Δ, thus valid
+			nothing
+		elseif isapprox(a′, a, atol=ϵ ) && b′ < b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ<0 (where b′ = b + Δ, Δ<0) ⟹ a⋅x = b + Δ -s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+			neighbor_ap[l][n] = !neighbor_ap[l][n]
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≤ b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ≥0 (where -b′ = b - Δ, Δ≥0) ⟹ a⋅x = b - Δ + s && Δ≥0 && s≥0 ⟹ a⋅x = b for s = Δ, thus valid
+			nothing
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ > b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ<0 (where -b′ = b - Δ, Δ<0) ⟹ a⋅x = b - Δ + s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+			neighbor_ap[l][n] = !neighbor_ap[l][n]
 		else
-			neighbor_state[layer][neuron] = !neighbor_state[layer][neuron]
+			error("Check neuron flipping rules.")
 		end
 	end
-	return neighbor_state
+
+	return neighbor_ap
 end
 
-# Handle flipping for type 3 neurons
-function type3!(set, neighbor_state, weights, neighbor_constraint)
-	for neuron_idx in set # Type 3 neurons
-		layer, neuron = get_layer_neuron(neuron_idx, neighbor_state)
-		new_constraint = -neuron_map(layer, neuron, neighbor_state, weights) # negative because testing 0->1 flip
-		if !isapprox(new_constraint, zeros(length(new_constraint)), atol=ϵ )
-			neighbor_state[layer][neuron] = 1
-		end
-	end
-	return neighbor_state
-end
+
+
+
+
+
+
 
 
 
@@ -416,11 +419,11 @@ end
 
 
 ### FUNCTIONS TO VERIFY ACTIVATION PATTERN ###
-# Make sure we generate the correct state for a region
-function check_state(input, weights, state)
-	if state != get_state(input, weights) 
-		@show input;  @show state;  @show get_state(input, weights)
-		error("NN state not what it seems!")
+# Make sure we generate the correct ap for a region
+function check_ap(input, weights, ap)
+	if ap != get_ap(input, weights) 
+		@show input;  @show ap;  @show get_ap(input, weights)
+		error("NN ap not what it seems!")
 	end
 	return nothing
 end
@@ -484,37 +487,37 @@ end
 
 
 ### MAIN ALGORITHM ###
-# Given input point and weights return state2input, state2output, state2map, plt_in, plt_out
+# Given input point and weights return ap2input, ap2output, ap2map, plt_in, plt_out
 # set reach=false for just cell enumeration
 # Supports looking for multiple backward reachable sets at once
 function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
 	# Construct necessary data structures #
-	state2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A,b) input constraints
-	state2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (A′,b′) ouput constraints
-	state2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
-	state2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from state -> (C,d) local affine map
-	state2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from state to neuron indices we know are essential
-	working_set = Set{Vector{BitVector}}() # Network states we want to explore
+	ap2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
+	ap2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
+	ap2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
+	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
+	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
+	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 
 	# Initialize algorithm #
 	input = get_input(Aᵢ, bᵢ)
-	state = get_state(input, weights)
-	state2essential[state] = Vector{Int64}()
-	push!(working_set, state)
-	num_neurons = sum([length(state[layer]) for layer in 1:length(state)])
+	ap = get_ap(input, weights)
+	ap2essential[ap] = Vector{Int64}()
+	push!(working_set, ap)
+	num_neurons = sum([length(ap[layer]) for layer in 1:length(ap)])
 	
 	# Begin cell enumeration #
 	i, saved_lps, solved_lps, rank_deficient = (1, 0, 0, 0)
 	while !isempty(working_set)
 		println(i)
-		state = pop!(working_set)
+		ap = pop!(working_set)
 
 		# Get local affine_map
-		C, d = local_map(state, weights)
+		C, d = local_map(ap, weights)
 		rank(C) != length(d) ? rank_deficient += 1 : nothing
-		state2map[state] = (C,d)
+		ap2map[ap] = (C,d)
 
-		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, state, num_neurons)
+		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, ap, num_neurons)
 
 		# We can check this before removing redundant constraints
 		if verification
@@ -522,30 +525,30 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
 					println("Found input that maps to target set!")
-					@show state
-					return state2input, state2output, state2map, state2backward
+					@show ap
+					return ap2input, ap2output, ap2map, ap2backward
 				end
 			end
 		end
 		
-		# Uncomment these lines to double check generated state is correct
-		# center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
-		# check_state(center, weights, state)
+		# Uncomment these lines to double check generated ap is correct
+		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
+		check_ap(center, weights, ap)
 
-		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, state2essential[state])
-		working_set, state2essential = add_neighbor_states(state, neighbor_indices, working_set, idx2repeat, zerows, weights, state2essential)
-		state2input[state] = (A,b)
+		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap])
+		working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
+		ap2input[ap] = (A,b)
 
-		reach ? state2output[state] = affine_map(A, b, C, d) : nothing
+		reach ? ap2output[ap] = affine_map(A, b, C, d) : nothing
 		if back
 			for k in 1:length(Aₒ)
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
-					state2backward[k][state] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
+					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
 				end
 			end
 		end
-		
+
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end
 	verification ? println("No input maps to the target set.") : nothing
@@ -553,5 +556,5 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	total_lps = saved_lps + solved_lps
 	println("Total solved LPs: ", solved_lps)
 	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
-	return state2input, state2output, state2map, state2backward
+	return ap2input, ap2output, ap2map, ap2backward
 end

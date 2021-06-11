@@ -51,8 +51,8 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-flux_net, weights = test_random_flux(2, 2, 50, 3) # (in_d, out_d, hdim, layers; Aₒ=[], bₒ=[], value=false)
-Aᵢ, bᵢ = input_constraints_random(weights, "hexagon")
+weights = random_net(3, 3, 5, 5) # (in_d, out_d, hdim, layers; Aₒ=[], bₒ=[], value=false)
+Aᵢ, bᵢ = input_constraints_random(weights, "big box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
@@ -63,3 +63,4 @@ end
 
 # Plot all regions (only 2D input) #
 # plt_in  = plot_hrep_random(state2input, space="input")
+
