@@ -1,17 +1,21 @@
-using Flux, Tracker, JLD2, FileIO, MAT, NPZ, LinearAlgebra
+using MAT, LinearAlgebra
 include("nnet.jl")
 
 
 # Evaluate network. Takes care of normalizing inputs and un-normalizing outputs
-function eval_net(input, net_dict, copies::Int64)
-	copies == -1 ? (return input) : nothing
-	NN_out = (input - net_dict["X_mean"]') ./ net_dict["X_std"]'
-    for layer = 1:length(net_dict["weights"])-1
-        NN_out = relu.(net_dict["weights"][1,layer]*NN_out + net_dict["biases"][1,layer]')
+function eval_net(input, weights, net_dict, copies::Int64)
+	copies == 0 ? (return input) : nothing
+	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
+	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+	NN_out = vcat(Aᵢₙ*input + bᵢₙ, [1.])
+    for layer = 1:length(weights)-1
+        NN_out = max.(0, weights[layer]*NN_out)
     end
-    output = vec( (net_dict["weights"][1,end]*NN_out + net_dict["biases"][1,end]') .* net_dict["Y_std"]' + net_dict["Y_mean"]' )
-    return eval_net(output, net_dict, copies-1)
+    output = Aₒᵤₜ*weights[end]*NN_out + bₒᵤₜ
+    return eval_net(output, weights, net_dict, copies-1)
 end
+
+bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,b]
 
 # NN with input in, output out, hidden dim hdim, and hidden layers layers.
 function random_net(in_d, out_d, hdim, layers)
@@ -23,31 +27,6 @@ function random_net(in_d, out_d, hdim, layers)
 	Weights[end] = sqrt(2/515)*(2*rand(out_d, hdim) - rand(out_d, hdim))
 	return Weights
 end
-
-### LOAD NETWORKS ###
-# Want to load each network in such that I get:
-# ⋅ augmented weights
-# ⋅	numLayers (int): Number of weight matrices or bias vectors in neural network
-# ⋅ layerSizes (list of ints): Size of input layer, hidden layers, and output layer
-# ⋅ inputSize (int): Size of input
-# ⋅ outputSize (int): Size of output
-# ⋅ input normalization map
-# ⋅ output unnormalization map
-
-
-# Converts network weights and biases to just weights. i.e. only linear maps, not affine maps.
-# Works for Dense Flux networks
-function flux2augmented(NN)
-	Weights = Vector{Array{Float64,2}}(undef,length(NN))
-	for layer in 1:(length(NN)-1)
-		Weights[layer] = vcat(hcat(Tracker.data(NN[layer].W), Tracker.data(NN[layer].b)), reshape(zeros(1+size(NN[layer].W,2)),1,:))
-		Weights[layer][end,end] = 1
-	end
-	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
-	Weights[length(NN)] = hcat(Tracker.data(NN[length(NN)].W), Tracker.data(NN[length(NN)].b))
-	return Weights
-end
-
 
 
 # Load nnet network #
@@ -79,20 +58,16 @@ function nnet_load(filename)
 	return weights, nnet, net_dict
 end
 
-# Load Pendulum Networks #
-#= 
-net = matread("models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat")
-"weights"
-"biases"
-"X_mean"
-"X_std"
-"Y_mean"
-"Y_std"
-input  = [θ, θ_dot]_t
-output = [θ, θ_dot]_t+1
-=#
 
-function pendulum_net2(filename::String, copies::Int64)
+# Load ACAS Networks #
+function acas_net_nnet(a::Int64, b::Int64)
+	filename = string("models/ACAS_nnet/ACASXU_experimental_v2a_", a, "_", b, ".nnet")
+	return nnet_load(filename)
+end
+
+
+# Load Pendulum Networks #
+function pendulum_net(filename::String, copies::Int64)
 	model = matread(filename)
 	num_layers = length(model["weights"])
 	layer_sizes = vcat(size(model["weights"][1], 2), [length(model["biases"][i]) for i in 1:num_layers])
@@ -148,42 +123,4 @@ function pendulum_net2(filename::String, copies::Int64)
 
 	return weights, net_dict
 end
-
-
-function pendulum_net(model::String, copies::Int64)
-	net_dict = matread(model)
-	σ_x = Diagonal(vec(net_dict["X_std"]))
-	μ_x = vec(net_dict["X_mean"])
-	σ_y = Diagonal(vec(net_dict["Y_std"]))
-	μ_y = vec(net_dict["Y_mean"])
-
-	layers = [Dense(net_dict["weights"][1], net_dict["biases"][1]', relu)]
-	for net_copy in 1:copies # copies = 0 means just original network
-		layers = vcat(layers, [Dense(net_dict["weights"][i], net_dict["biases"][i]', relu) for i in 2:length(net_dict["weights"])-1])
-		W = net_dict["weights"][1]*inv(σ_x)*σ_y*net_dict["weights"][end]
-		b = net_dict["weights"][1]*inv(σ_x)*(σ_y*net_dict["biases"][end]' + μ_y - μ_x) + net_dict["biases"][1]'
-		layers = vcat(layers, [Dense(W, b, relu)])
-	end
-	layers = vcat(layers, [Dense(net_dict["weights"][i], net_dict["biases"][i]', relu) for i in 2:length(net_dict["weights"])-1])
-	layers = vcat(layers, [Dense(net_dict["weights"][end], net_dict["biases"][end]', identity)])
-	flux_net = Chain(layers...)
-	str = string("pend_net_", copies, ".mat")
-	matwrite(str,
-	Dict(
-	"W" => [Float64.(flux_net[i].W) for i in 1:length(flux_net)],
-	"b" => [Float64.(flux_net[i].b) for i in 1:length(flux_net)],
-	"range_for_scaling" => [1.0, 1.0, 1.0],
-	"means_for_scaling" => [0.0, 0.0, 0.0]))
-	return flux2augmented(flux_net), net_dict
-end
-
-
-# Load ACAS Networks #
-# NNET #
-function acas_net_nnet(a::Int64, b::Int64)
-	filename = string("models/ACAS_nnet/ACASXU_experimental_v2a_", a, "_", b, ".nnet")
-	return nnet_load(filename)
-end
-
-
 
