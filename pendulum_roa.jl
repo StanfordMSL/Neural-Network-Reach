@@ -85,14 +85,14 @@ end
 # Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
 # Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
 
-# # Run algorithm
+# # # Run algorithm
 # @time begin
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
 # end
 # @show length(state2input)
 
 # Plot all regions #
-# plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
+plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
 # plt_in2  = plot_hrep_pendulum(state2backward[1], net_dict, space="input")
 # plt_out = plot_hrep_pendulum(state2output, net_dict, space="output")
 
@@ -100,14 +100,28 @@ end
 
 # Find fixed point(s) #
 fixed_points, fp_dict = find_fixed_points(state2map, state2input, net_dict) # Fixed point =  [-0.028117297151424497, 0.09680434353994193]
-println("Verified fixed point? ", eval_net(fixed_points[1], weights, net_dict, 1) ≈ fixed_points[1])
+fp = fixed_points[1]
+println("Verified fixed point? ", eval_net(fp, weights, net_dict, 1) ≈ fp)
+scatter!(plt_in1, [rad2deg(fp[1])], [rad2deg(fp[2])], label="Fixed Point", color=:black)
 
 # Check local stability and find local Lyapunov function #
-Q, r = local_stability(fixed_points[1], fp_dict)
+Q = local_stability(fp, fp_dict)
 
 # Find max ellipsoidal ROA in polytope #
+# α = max_ellipsoid(Q, fp, fp_dict)
+α = 3.0 # scaling. α ↑ ⟹ volume ↑
+plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q)), check_posdef=false)
+
+# Check that it is actually a ROA #
+xₒ = deg2rad.([0., 25.])
+state_traj = compute_traj(xₒ, 10, weights, net_dict)
+scatter!(plt_in1, rad2deg.(state_traj[1,:]), rad2deg.(state_traj[2,:]))
+
 
 # Find one step reachable set from max ellipsoidal ROA in polytpe #
+Q̄ = forward_reach_ellipse(Q, fp, fp_dict)
+plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q̄), check_posdef=false))
+
 
 # Find polytope that lies between these ellipsoids #
 

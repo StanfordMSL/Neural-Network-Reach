@@ -10,12 +10,12 @@ end
 
 # Return trajectory of discrete time system where each column is the state at step i
 # Julia arrays are stored in column-major order so it's faster to do matrix[:,i] = data rather than matrix[i,:] = data
-function compute_traj(init, steps::Int64, net_dict; dt=0.1)
+function compute_traj(init, steps::Int64, weights, net_dict; dt=0.1)
 	t = collect(0:dt:dt*steps)
 	state_traj = Matrix{Float64}(undef, net_dict["input_size"], length(t))
 	state_traj[:,1] = init
 	for i in 2:length(t)
-		state_traj[:,i] = eval_net(state_traj[:,i-1], weights, net_dict, 0)
+		state_traj[:,i] = eval_net(state_traj[:,i-1], weights, net_dict, 1)
 	end
 	return state_traj
 end
@@ -62,7 +62,7 @@ function find_fixed_points(state2map, state2input, net_dict)
 	return fixed_points, fp_dict
 end
 
-# Find local quadratic Lyapunov function of the form: x'Qx + r'x + constant
+# Find local quadratic Lyapunov function of the form: (x - c)'Q⁻¹(x - c)
 function local_stability(p, fp_dict)
 	region = fp_dict[p]
 	A, b = region[1]
@@ -71,18 +71,23 @@ function local_stability(p, fp_dict)
 	F = eigen(C)
 	if all(norm.(F.values) .< 1) # then stable
 		# Transform affine sytem to linear system:
-		# xₜ₊₁ = Cxₜ + d,  x_ₜ = xₜ + inv(C)*d  ⟹ x_ₜ₊₁ = Cx_ₜ
-		# local Lyapunov function: x_'*Q*x_ = x'*Q*x + 2*d'*inv(C)*Q + constant
-		Q = lyapd(C, Matrix{Float64}(I, dim, dim)) # 2nd arg is symmetric. Where does it come from?
-		r = 2*d'*inv(C)*Q
+		# xₜ₊₁ = Cxₜ + d,  x_ₜ = xₜ - p  ⟹ x_ₜ₊₁ = Cx_ₜ
+		# local Lyapunov function: x_'*Q*x_ =  (x - p)'*Q*(x - p)
+		Q = lyapd(C', Matrix{Float64}(I, dim, dim)) # 2nd arg is symmetric. Where does it come from?
 	else
 		error("Unstable local system.")
 	end
-	return Q, r
+	return Q
 end
 
 
-
+# Compute Q̄ such that (x₊ - p)'*Q̄*(x₊ - p) ≤ 1 = {x₊ | (x - p)'*Q*(x - p) ≤ 1, x₊ = C*x + d}
+function forward_reach_ellipse(Q, p, fp_dict)
+	region = fp_dict[p]
+	C, d = region[2]
+	C_inv = inv(C)
+	return C_inv'*Q*C_inv
+end
 
 
 
