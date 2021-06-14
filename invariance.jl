@@ -63,8 +63,8 @@ function find_fixed_points(state2map, state2input, net_dict)
 end
 
 # Find local quadratic Lyapunov function of the form: (x - c)'Q⁻¹(x - c)
-function local_stability(p, fp_dict)
-	region = fp_dict[p]
+function local_stability(fp, fp_dict)
+	region = fp_dict[fp]
 	A, b = region[1]
 	C, d = region[2]
 	dim = length(d)
@@ -82,15 +82,66 @@ end
 
 
 # Compute Q̄ such that (x₊ - p)'*Q̄*(x₊ - p) ≤ 1 = {x₊ | (x - p)'*Q*(x - p) ≤ 1, x₊ = C*x + d}
-function forward_reach_ellipse(Q, p, fp_dict)
-	region = fp_dict[p]
+function forward_reach_ellipse(Q, fp, fp_dict)
+	region = fp_dict[fp]
 	C, d = region[2]
 	C_inv = inv(C)
 	return C_inv'*Q*C_inv
 end
 
+# Solve the optimization problem:
+# maximize a'x
+# subject to (x - fp)'P(x - fp) ≤ 1
+function lin_quad_opt(a, P_inv, fp)
+	x_opt = P_inv*a ./ sqrt(a⋅(P_inv*a)) + fp
+	opt_val = a⋅x_opt
+	return x_opt, opt_val
+end
+
+# Checks whether a given polyhedron is bounded (i.e. is a polyotpe)
+# Can be made faster by solving Cheby LP
+function is_polytope(A, b)
+	return isbounded(HPolyhedron(constraints_list(A, b)))
+end
+
+# Checks whether a given polytope is a subset of a given ellipsoid
+function check_P_in_E(A, b, Q, α, fp)
+	is_polytope(A, b) ? nothing : (return false)
+	P_inv = inv(Q/α)
+	for i in 1:length(b)
+		x_opt, opt_val = lin_quad_opt(A[i,:], P_inv, fp)
+		opt_val < b[i] ? (return false) : nothing
+	end
+	return true
+end
+
+# find polytope P s.t. E_innner ⊂ P ⊂ E_outer
+# E_inner = {x | (x - x_f)'(1\α)*Q̄*(x - x_f) ≤ 1}
+# E_outer = {x | (x - x_f)'(1\α)*Q*(x - x_f) ≤ 1}
+function intermediate_polytope(Q, Q̄, α, fp; max_constraints=10)
+	dim = length(fp)
+	A = Matrix{Float64}(undef, 1, dim)
+	A[1,:] = [bound_r(-1,1) for _ in 1:dim]
+
+	P_inv = inv(Q̄/α)
+	x_opt, opt_val = lin_quad_opt(A[1,:], P_inv, fp)
+	b = [opt_val]
+	for k in 2:max_constraints
+		# if k > dim + 1 && check_P_in_E(A, b, Q, α, fp)
+		# 	return A, b
+		# end
+		A = vcat(A, reshape([bound_r(-1,1) for _ in 1:dim], 1,2))
+		x_opt, opt_val = lin_quad_opt(A[k,:], P_inv, fp)
+		b = vcat(b, [opt_val])
+	end
+	println("Incorrect Polytope!")
+	return A, b
+end
 
 
+
+
+## OLD ##
 # Find an i-step invariant set given a fixed point p
 function i_step_invariance(fixed_point, max_steps)
 	for i in 0:max_steps
