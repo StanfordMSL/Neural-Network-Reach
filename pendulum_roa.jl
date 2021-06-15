@@ -92,7 +92,7 @@ end
 # @show length(state2input)
 
 # Plot all regions #
-plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
+# plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
 # plt_in2  = plot_hrep_pendulum(state2backward[1], net_dict, space="input")
 # plt_out = plot_hrep_pendulum(state2output, net_dict, space="output")
 
@@ -114,23 +114,31 @@ plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q)), check_posdef=false)
 
 # Check that it is actually a ROA #
 xₒ = deg2rad.([0., 25.])
-state_traj = compute_traj(xₒ, 10, weights, net_dict)
+state_traj = compute_traj(xₒ, 100, weights, net_dict)
 scatter!(plt_in1, rad2deg.(state_traj[1,:]), rad2deg.(state_traj[2,:]))
 
 # Find one step reachable set from max ellipsoidal ROA in polytpe #
 Q̄ = forward_reach_ellipse(Q, fp, fp_dict)
 plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q̄), check_posdef=false))
 
-# Find polytope that lies between these ellipsoids #
-Aₛ, bₛ = intermediate_polytope(Q, Q̄, α, fp; max_constraints=100)
-plot!(plt_in1,  (180/π)*HPolytope(constraints_list(Aₛ, bₛ)))
+# # Find polytope that lies between these ellipsoids #
+# Aₛ, bₛ = intermediate_polytope(Q, Q̄, α, fp; max_constraints=100)
+# plot!(plt_in1,  (180/π)*HPolytope(constraints_list(Aₛ, bₛ)))
 
 # Perform backwards reachablity on this polytope to approximate maximal ROA #
-copies_chain = 10 # copies = 1 is original network
-model_chain = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
-weights_chain, net_dict_chain = pendulum_net(model_chain, copies_chain)
-state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₛ], [bₛ], reach=false, back=true, verification=false)
-plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
+# copies_chain = 5 # copies = 1 is original network
+# model_chain = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
+# weights_chain, net_dict_chain = pendulum_net(model_chain, copies_chain)
+# Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+# Aₒ_chain, bₒ_chain = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
+# state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], reach=false, back=true, verification=false)
+# plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
+# plot!(plt_in2, title=string(copies_chain, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
+
+
+
+
+
 
 
 # old stuff #
