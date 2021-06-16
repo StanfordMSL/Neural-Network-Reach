@@ -44,7 +44,7 @@ end
 
 
 # Plot all polytopes
-function plot_hrep_pendulum(state2constraints, net_dict; space = "input")
+function plot_hrep_pendulum(state2constraints, net_dict; space = "input", type="normal")
 	plt = plot(reuse = false, legend=false, xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
 	for state in keys(state2constraints)
 		A, b = state2constraints[state]
@@ -69,9 +69,30 @@ function plot_hrep_pendulum(state2constraints, net_dict; space = "input")
 			@show reg
 			error("Empty polyhedron.")
 		end
-		plot!(plt,  reg, fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+
+		if type == "normal"
+			plot!(plt,  reg, fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+		elseif type == "gif"
+			plot!(plt,  reg, xlims=(-90, 90), ylims=(-90, 90), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+		end
 	end
 	return plt
+end
+
+
+# make gif of backwards reachable set over time
+function BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, steps)
+	model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
+	plt = plot((180/π)*HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-90, 90), ylims=(-90, 90))
+	# Way 1
+	anim = @animate for Step in 2:steps
+		weights, net_dict = pendulum_net(model, Step)
+		Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+		Aₒ, bₒ = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
+		state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=true, verification=false)
+    	plt = plot_hrep_pendulum(state2backward[1], net_dict, space="input", type="gif")
+	end
+	gif(anim, string("brs_",steps  ,".gif"), fps = 2)
 end
 
 
@@ -85,7 +106,7 @@ end
 # Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
 # Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
 
-# # # Run algorithm
+# # Run algorithm
 # @time begin
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
 # end
@@ -121,22 +142,27 @@ scatter!(plt_in1, rad2deg.(state_traj[1,:]), rad2deg.(state_traj[2,:]))
 Q̄ = forward_reach_ellipse(Q, fp, fp_dict)
 plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q̄), check_posdef=false))
 
-# # Find polytope that lies between these ellipsoids #
-# Aₛ, bₛ = intermediate_polytope(Q, Q̄, α, fp; max_constraints=100)
-# plot!(plt_in1,  (180/π)*HPolytope(constraints_list(Aₛ, bₛ)))
+# Find polytope that lies between these ellipsoids #
+Aₛ, bₛ = intermediate_polytope(Q, Q̄, α, fp; max_constraints=100)
+plot!(plt_in1,  (180/π)*HPolytope(constraints_list(Aₛ, bₛ)))
 
-# Perform backwards reachablity on this polytope to approximate maximal ROA #
-# copies_chain = 5 # copies = 1 is original network
-# model_chain = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
-# weights_chain, net_dict_chain = pendulum_net(model_chain, copies_chain)
-# Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
-# Aₒ_chain, bₒ_chain = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
-# state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], reach=false, back=true, verification=false)
-# plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
-# plot!(plt_in2, title=string(copies_chain, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
+# Perform backward reachablity on this polytope to approximate maximal ROA #
+copies_chain = 10 # copies = 1 is original network
+weights_chain, net_dict_chain = pendulum_net(model, copies_chain)
+Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+Aₒ_chain, bₒ_chain = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
+state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], reach=false, back=true, verification=false)
+plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
+plot!(plt_in2, title=string(copies_chain, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
 
+# Create gif of backward reachable set
+# BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, 5)
 
+# Show points inside ROA converge to fixed point
+plt_convergence = convergence(fp, state2backward_chain[1], weights, net_dict, 150)
 
+# Compute polytopic ROA #
+Aₚ, bₚ = invariant_polytope()
 
 
 

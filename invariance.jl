@@ -65,7 +65,6 @@ end
 # Find local quadratic Lyapunov function of the form: (x - c)'Q⁻¹(x - c)
 function local_stability(fp, fp_dict)
 	region = fp_dict[fp]
-	A, b = region[1]
 	C, d = region[2]
 	dim = length(d)
 	F = eigen(C)
@@ -137,6 +136,40 @@ function intermediate_polytope(Q, Q̄, α, fp; max_constraints=10)
 	println("Incorrect Polytope!")
 	return A, b
 end
+
+# Plot convergence over time of some points to a fixed point
+function convergence(fp, state2backward, weights, net_dict, traj_length)
+	plt = plot(title="Distance to Fixed Point vs Time-Step", xlabel="Time-Step", ylabel="Distance")
+	for state in keys(state2backward)
+		Aᵢ, bᵢ = state2backward[state]
+		Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
+		Ā = Aᵢ*Aᵢₙ
+		b̄ = bᵢ - Aᵢ*bᵢₙ
+		xₒ, nothing, nothing = cheby_lp([], [], Ā, b̄, [])
+		state_traj = compute_traj(xₒ, traj_length, weights, net_dict)
+		distances = [norm(state_traj[:,k] - fp) for k in 1:traj_length+1]
+		plot!(plt, 1:traj_length+1, distances, label=false)
+	end
+	return plt
+end
+
+using JuMP, COSMO
+
+# Compute polytopic ROA #
+function invariant_polytope(Aᵢ, bᵢ, C)
+	model = Model(COSMO.Optimizer)
+	@variable(model, x[1:2, 1:2], PSD)
+	@variable(model, y[1:2, 1:2], Symmetric)
+	@objective(model, Min, LinearAlgebra.tr(y))
+	@SDconstraint(model, A >= 0)
+	optimize!(model)
+	termination_status(model) == MOI.OPTIMAL
+end
+
+
+
+
+
 
 
 
