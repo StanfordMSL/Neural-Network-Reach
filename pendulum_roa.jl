@@ -99,12 +99,12 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-# copies = 1 # copies = 1 is original network
-# model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
-# weights, net_dict = pendulum_net(model, copies)
+copies = 1 # copies = 1 is original network
+model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
+weights, net_dict = pendulum_net(model, copies)
 
-# Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
-# Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
+Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
+Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
 
 # # Run algorithm
 # @time begin
@@ -123,46 +123,49 @@ end
 fixed_points, fp_dict = find_fixed_points(state2map, state2input, net_dict) # Fixed point =  [-0.028117297151424497, 0.09680434353994193]
 fp = fixed_points[1]
 println("Verified fixed point? ", eval_net(fp, weights, net_dict, 1) ≈ fp)
-scatter!(plt_in1, [rad2deg(fp[1])], [rad2deg(fp[2])], label="Fixed Point", color=:black)
+# scatter!(plt_in1, [rad2deg(fp[1])], [rad2deg(fp[2])], label="Fixed Point", color=:black)
 
-# Check local stability and find local Lyapunov function #
+# # Check local stability and find local Lyapunov function #
 Q = local_stability(fp, fp_dict)
 
 # Find max ellipsoidal ROA in polytope #
 # α = max_ellipsoid(Q, fp, fp_dict)
 α = 3.0 # scaling. α ↑ ⟹ volume ↑
-plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q)), check_posdef=false)
+# plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q)), check_posdef=false)
 
-# Check that it is actually a ROA #
-xₒ = deg2rad.([0., 25.])
-state_traj = compute_traj(xₒ, 100, weights, net_dict)
-scatter!(plt_in1, rad2deg.(state_traj[1,:]), rad2deg.(state_traj[2,:]))
+# # Check that it is actually a ROA #
+# xₒ = deg2rad.([0., 25.])
+# state_traj = compute_traj(xₒ, 100, weights, net_dict)
+# scatter!(plt_in1, rad2deg.(state_traj[1,:]), rad2deg.(state_traj[2,:]))
 
 # Find one step reachable set from max ellipsoidal ROA in polytpe #
 Q̄ = forward_reach_ellipse(Q, fp, fp_dict)
-plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q̄), check_posdef=false))
+# plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q̄), check_posdef=false))
 
 # Find polytope that lies between these ellipsoids #
 Aₛ, bₛ = intermediate_polytope(Q, Q̄, α, fp; max_constraints=100)
-plot!(plt_in1,  (180/π)*HPolytope(constraints_list(Aₛ, bₛ)))
+# plot!(plt_in1,  (180/π)*HPolytope(constraints_list(Aₛ, bₛ)))
 
-# Perform backward reachablity on this polytope to approximate maximal ROA #
-copies_chain = 10 # copies = 1 is original network
-weights_chain, net_dict_chain = pendulum_net(model, copies_chain)
-Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
-Aₒ_chain, bₒ_chain = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
-state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], reach=false, back=true, verification=false)
-plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
-plot!(plt_in2, title=string(copies_chain, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
+# # Perform backward reachablity on this polytope to approximate maximal ROA #
+# copies_chain = 5 # copies = 1 is original network
+# weights_chain, net_dict_chain = pendulum_net(model, copies_chain)
+# Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+# Aₒ_chain, bₒ_chain = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
+# state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], reach=false, back=true, verification=false)
+# plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
+# plot!(plt_in2, title=string(copies_chain, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
 
 # Create gif of backward reachable set
 # BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, 5)
 
 # Show points inside ROA converge to fixed point
-plt_convergence = convergence(fp, state2backward_chain[1], weights, net_dict, 150)
+# plt_convergence = convergence(fp, state2backward_chain[1], weights, net_dict, 150)
 
 # Compute polytopic ROA #
-Aₚ, bₚ = invariant_polytope()
+region = fp_dict[fp]
+Aₓ, bₓ = region[1]
+C, d = region[2]
+invariant_polytope(Aₓ, bₓ, Aₛ, bₛ, C)
 
 
 
