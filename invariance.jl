@@ -1,4 +1,4 @@
-using LinearAlgebra, MatrixEquations, COSMO
+using LinearAlgebra, MatrixEquations, JuMP, Convex, SCS, COSMO, GLPK, Distributions
 
 # Return true if x ∈ {x | Ax ≤ b}, otherwise return false
 function in_polytope(x, A, b)
@@ -117,24 +117,20 @@ end
 # find polytope P s.t. E_innner ⊂ P ⊂ E_outer
 # E_inner = {x | (x - x_f)'(1\α)*Q̄*(x - x_f) ≤ 1}
 # E_outer = {x | (x - x_f)'(1\α)*Q*(x - x_f) ≤ 1}
-function intermediate_polytope(Q, Q̄, α, fp; max_constraints=10)
+function intermediate_polytope(Q̄, α, fp, Aₓ, bₓ, C; max_constraints=100)
 	dim = length(fp)
-	A = Matrix{Float64}(undef, 1, dim)
-	A[1,:] = [bound_r(-1,1) for _ in 1:dim]
+	# get constraints for linear system (x̄ frame)
+	A = deepcopy(Aₓ)
+	b = deepcopy(bₓ) - A*fp
 
 	P_inv = inv(Q̄/α)
-	x_opt, opt_val = lin_quad_opt(A[1,:], P_inv, fp)
-	b = [opt_val]
-	for k in 2:max_constraints
-		# if k > dim + 1 && check_P_in_E(A, b, Q, α, fp)
-		# 	return A, b
-		# end
+	for k in 1:max_constraints
 		A = vcat(A, reshape([bound_r(-1,1) for _ in 1:dim], 1,2))
-		x_opt, opt_val = lin_quad_opt(A[k,:], P_inv, fp)
+		x_opt, opt_val = lin_quad_opt(A[end,:], P_inv, zeros(dim)) # want constraints in the x̄ frame
 		b = vcat(b, [opt_val])
 	end
-	println("Incorrect Polytope!")
-	return A, b
+	
+	return A, b + A*fp # return constraints in the x frame
 end
 
 # Plot convergence over time of some points to a fixed point
@@ -157,16 +153,21 @@ end
 function solve_sdp_jump(Fₒ, C)
 	n_cons, dim = size(Fₒ)
 	model = Model(COSMO.Optimizer)
+	set_optimizer_attribute(model, "max_iter", 7000)
+	set_optimizer_attribute(model, "verbose", true)
 	
 	@variable(model, Q_diag[1:n_cons])
 	Q = Matrix(Diagonal(Q_diag))
-	@variable(model, R[1:n_cons, 1:n_cons], PSD)
+	@variable(model, R[1:n_cons, 1:n_cons])
 
-	@objective(model, Min, -sum(Q_diag) + sum(R))
-
-	@constraint(model, Q_diag .≥ zeros(n_cons))
+	# @objective(model, Min, -sum(Q_diag) + sum(R))
+	@objective(model, Min, 0)
+	
 	@constraint(model, Q*Fₒ*C - R'*Fₒ .== zeros(n_cons, dim))
 	@SDconstraint(model, [Q R; R' Q] ≥ 0)
+	@constraint(model, Q_diag .≥ 1e1*ones(n_cons))
+	# @constraint(model, Q_diag .≤ 1e6*ones(n_cons))
+	@constraint(model, R .≥ zeros(n_cons, n_cons))
 	
 	optimize!(model)
 	if termination_status(model) == MOI.OPTIMAL
@@ -177,18 +178,19 @@ function solve_sdp_jump(Fₒ, C)
 	end
 end
 
-using Convex, SCS
 # Solve polytope ROA SDP using CVX
 function solve_sdp_cvx(Fₒ, C)
 	n_cons, dim = size(Fₒ)
 	
 	Q_diag = Variable(n_cons, Positive())
-	R = Semidefinite(n_cons)
+	R = Variable(n_cons, n_cons, Positive())
 
-	problem = minimize(-tr(diagm(Q_diag)) + sum(R))
+	# problem = minimize(-sum(Q_diag) + sum(R))
+	problem = minimize(0)
 
 	problem.constraints += diagm(Q_diag)*Fₒ*C - R'*Fₒ == zeros(n_cons, dim)
 	problem.constraints += ([diagm(Q_diag) R; R' diagm(Q_diag)] in :SDP)
+	problem.constraints += Q_diag ≥ ones(n_cons)
 	
 	solve!(problem, () -> SCS.Optimizer())
 	if problem.status == MOI.OPTIMAL
@@ -201,12 +203,13 @@ end
 
 # Solve polytope ROA LP using JuMP
 function solve_lp(Pₒ, n_cons, n_consₓ)
-	model = Model(COSMO.Optimizer)
+	model = Model(GLPK.Optimizer)
 	@variable(model, λ[1:n_cons+n_consₓ])
 	@objective(model, Max, sum(λ[1:n_cons]))
 	@constraint(model, (Pₒ' - I)*λ .≤ zeros(n_cons+n_consₓ))
 	@constraint(model, λ[n_cons+1:end] .≤ ones(n_consₓ))
-	@constraint(model, λ[1:n_cons] .≤ 1e2*ones(n_cons)) # extra
+	# @constraint(model, λ[1:n_cons] .≤ 1e2*ones(n_cons)) # extra
+	@constraint(model, λ .≥ 1e-6*ones(n_cons+n_consₓ)) # extra
 	optimize!(model)
 	if termination_status(model) == MOI.OPTIMAL
 		return value.(λ)
@@ -226,8 +229,6 @@ function invariant_polytope(Aₓ, bₓ, Aₒ, bₒ, C)
 	Fₒ = vcat([reshape(Aₒ[i,:] ./ bₒ[i], (1, :)) for i in 1:length(bₒ)]...) 
 	Fₒ = vcat(Fₒ, Fₓ)
 
-	@show Fₒ
-
 	# Λ ∈ R^(n_cons, n_cons), Diagonal
 	# P ∈ R^(n_cons, n_cons), PSD
 	# Pₒ = inv(Λ)*P*Λ
@@ -239,132 +240,115 @@ function invariant_polytope(Aₓ, bₓ, Aₒ, bₒ, C)
 
 	# solve SDP
 	Q_jmp, R_jmp = solve_sdp_jump(Fₒ, C)
-	Q_cvx, R_cvx = solve_sdp_cvx(Fₒ, C)
-	println("\n\n")
-	@show norm(Q_jmp - Q_cvx)
-	@show norm(R_jmp - R_cvx)
-	println("\n\n")
-
-	# with CVX variables
-	println("CVX Variables:")
-	Q_cvx = Matrix(Q_cvx)
-	Pₒ_cvx = R_cvx*inv(Q_cvx)
-	@show eigen(Pₒ_cvx).values
-	@show eigen([Q_cvx R_cvx; R_cvx' Q_cvx]).values
-
-	# with JuMP variables
-	println("JuMP Variables:")
-	Pₒ_jmp = R_jmp*inv(Q_jmp)
-	@show eigen(Pₒ_jmp).values
-	@show eigen([Q_jmp R_jmp; R_jmp' Q_jmp]).values
-	
-
-	# λ = solve_lp(Pₒ_cvx, n_cons, n_consₓ)
-	# @show (Pₒ_cvx' - I)*λ
-	# return λ
-end
-
-
-
-
-###########################################################################################
-
-
-function solve_sdp_cvx_sym(Fₒ, C)
-	n_cons, dim = size(Fₒ)
-	
-	Q_diag = Variable(n_cons, Positive())
-	R1 = Semidefinite(n_cons)
-	R2 = Variable(n_cons, n_cons)
-
-	problem = minimize(-tr(diagm(Q_diag)) + sum(R1))
-
-	problem.constraints += diagm(Q_diag)*Fₒ*C - R2'*Fₒ == zeros(n_cons, dim)
-	problem.constraints += (R1' - R2' in :SDP)
-	problem.constraints += (R1' + R2' in :SDP)
-	problem.constraints += ([diagm(Q_diag) R1; R1' diagm(Q_diag)] in :SDP)
-	
-	solve!(problem, () -> SCS.Optimizer())
-	if problem.status == MOI.OPTIMAL
-		return Diagonal(evaluate(Q_diag)), evaluate(R1), evaluate(R2)
-	else
-		@show problem.status
-		error("Suboptimal SDP!")
-	end
-end
-
-# Solve polytope ROA LP using JuMP
-function solve_lp_sym(Pₒ, n_cons, n_consₓ)
-	model = Model(GLPK.Optimizer)
-	@variable(model, λ[1:n_cons+n_consₓ])
-	@objective(model, Max, sum(λ[1:n_cons]))
-	@constraint(model, (Pₒ' - I)*λ .≤ zeros(n_cons+n_consₓ))
-	@constraint(model, λ[n_cons+1:end] .≤ ones(n_consₓ))
-	optimize!(model)
-	if termination_status(model) == MOI.OPTIMAL
-		return value.(λ)
-	else
-		@show termination_status(model)
-		error("Suboptimal LP!")
-	end
-end
-
-# Compute polytopic ROA #
-function invariant_polytope_sym(Aₓ, bₓ, Aₒ, bₒ, C)
-	n_consₓ, dim = size(Aₓ)
-	n_cons = length(bₒ)
-
-	Fₓ = vcat([reshape(Aₓ[i,:] ./ bₓ[i], (1, :)) for i in 1:length(bₓ)]...) 
-	Fₒ = vcat([reshape(Aₒ[i,:] ./ bₒ[i], (1, :)) for i in 1:length(bₒ)]...) 
-	Fₒ = vcat(Fₒ, Fₓ)
-
-	# solve SDP
-	# Q_jmp, R_jmp = solve_sdp_jump_sym(Fₒ, C)
-	Q_cvx, R1_cvx, R2_cvx = solve_sdp_cvx_sym(Fₒ, C)
+	# Q_cvx, R_cvx = solve_sdp_cvx(Fₒ, C)
 	# println("\n\n")
 	# @show norm(Q_jmp - Q_cvx)
 	# @show norm(R_jmp - R_cvx)
 	# println("\n\n")
 
+	# @show Q_cvx
+	# @show Q_jmp
+
 	# with CVX variables
-	println("CVX Variables:")
-	Pₒ_cvx = R1_cvx*inv(Q_cvx)
+	# Pₒ_cvx = R_cvx*inv(Q_cvx)
 
 	# with JuMP variables
-	# println("JuMP Variables:")
-	# Pₒ_jmp = R_jmp*inv(Q_jmp)
-	# @show eigen(Pₒ_jmp).values
-	# @show eigen([Q_jmp R_jmp; R_jmp' Q_jmp]).values
+	Pₒ_jmp = R_jmp*inv(Q_jmp)
+
+	λ = solve_lp(Pₒ_jmp, n_cons, n_consₓ)
+
+	F_res = inv(Diagonal(λ))*Fₒ
+
+	# Verify that found polytope is invariant
+	if is_invariant(F_res, C)
+		return F_res, ones(size(F_res,1))
+	else
+		println("Polytope not invariant.")
+		return F_res, ones(size(F_res,1))
+	end
+end
+
+# check if polytope Fx≤1 is invariant under dynamics xₜ₊₁ = Cxₜ
+# The polytope is invariant iff ∃ P ∈ PSD s.t.
+# FA = PF  &&  P1 ≤ 1
+function is_invariant(F, C)
+	n_cons, dim = size(F)
+	model = Model(GLPK.Optimizer)
+
+	@variable(model, P[1:n_cons, 1:n_cons])
+	@objective(model, Min, 0) # feasibility
+
+	@constraint(model, P.≥ zeros(n_cons, n_cons))
+	@constraint(model, P*F .== F*C )
+	# @constraint(model, P*F*inv(C) .== F) # this is the same as ^^
+	@constraint(model, P*ones(n_cons).≤ ones(n_cons))
 	
-	@show n_cons
-	@show n_consₓ
-	λ = solve_lp_sym(Pₒ_cvx, n_cons, n_consₓ)
-	return λ
+	optimize!(model)
+	if termination_status(model) == MOI.OPTIMAL
+		return true
+	else
+		@show termination_status(model)
+		return false
+	end
 end
 
 
+# Attempt to find a polytopic ROA via the SDP method
+ function polytope_roa_sdp(Aₓ, bₓ, C, Q̄, α, fp; max_constraints=100)
+ 	# Generate initial polytope
+ 	Aₛ, bₛ = intermediate_polytope(Q̄, α, fp, Aₓ, bₓ, C; max_constraints=max_constraints)
+
+ 	# Put constraints in x̄ frame
+	Aₓ_ = Aₓ
+	bₓ_ = bₓ - Aₓ_*fp
+	Aₛ_ = Aₛ
+	bₛ_ = bₛ - Aₛ_*fp
+
+	A_roa_, b_roa_ = invariant_polytope(Aₓ_, bₓ_, Aₛ_, bₛ_, C)
+	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
+ end
+
+# Sample P matrix s.t. P .≥ 0 && P*1 ≤ 1
+function sample_P(λ_c, constraints)
+	# Each row is rand() * a randomly sampled vector from the unit simplex
+	P = Matrix{Float64}(undef, constraints, constraints)
+	for row in 1:constraints
+		P[row, :] = rand()*rand(Dirichlet(ones(constraints)))
+	end
+
+	# Sylvester equation has unique solution when P and C have no common eigenvalues
+	vals, vecs = eigen(P)
+
+	# Could be dangerous infinite loop
+	if !isempty(intersect(vals, λ_c))
+		println("Eigenvalues intersect, generating new P matrix.")
+		return sample_P(λ_c)
+	else
+		return P
+	end
+
+end
+
+# Attempt to find a polytopic ROA via the SDP method
+ function polytope_roa_sylvester(Aₓ, bₓ, C, fp; constraints=100)
+ 	# Put domain constraints in x̄ frame
+	Aₓ_ = Aₓ
+	bₓ_ = bₓ - Aₓ_*fp
+	Aₛ_ = Aₛ
+	bₛ_ = bₛ - Aₛ_*fp
+
+	# Sample P s.t. P .≥ 0 && P*1 ≤ 1
+	λ_c, vecs_c = eigen(C)
+	P = sample_P(λ_c, constraints)	
+
+	# Solve Sylvester equation PF + F(-C) = 0
+	F = sylvc(P, -C, zeros(constraints, size(C,2)))
+
+	# Grow/shrink polytope roa to fit within domain polytope
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
+ end
 
 
 

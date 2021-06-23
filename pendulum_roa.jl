@@ -106,14 +106,14 @@ weights, net_dict = pendulum_net(model, copies)
 Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
 Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
 
-# # Run algorithm
+# Run algorithm
 # @time begin
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
 # end
 # @show length(state2input)
 
 # Plot all regions #
-# plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
+plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
 # plt_in2  = plot_hrep_pendulum(state2backward[1], net_dict, space="input")
 # plt_out = plot_hrep_pendulum(state2output, net_dict, space="output")
 
@@ -122,8 +122,11 @@ Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
 # Find fixed point(s) #
 fixed_points, fp_dict = find_fixed_points(state2map, state2input, net_dict) # Fixed point =  [-0.028117297151424497, 0.09680434353994193]
 fp = fixed_points[1]
+region = fp_dict[fp]
+Aₓ, bₓ = region[1]
+C, d = region[2]
 println("Verified fixed point? ", eval_net(fp, weights, net_dict, 1) ≈ fp)
-# scatter!(plt_in1, [rad2deg(fp[1])], [rad2deg(fp[2])], label="Fixed Point", color=:black)
+scatter!(plt_in1, [rad2deg(fp[1])], [rad2deg(fp[2])], label="Fixed Point", color=:black)
 
 # # Check local stability and find local Lyapunov function #
 Q = local_stability(fp, fp_dict)
@@ -131,20 +134,39 @@ Q = local_stability(fp, fp_dict)
 # Find max ellipsoidal ROA in polytope #
 # α = max_ellipsoid(Q, fp, fp_dict)
 α = 3.0 # scaling. α ↑ ⟹ volume ↑
-# plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q)), check_posdef=false)
+plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q)), check_posdef=false)
 
-# # Check that it is actually a ROA #
+# Check that it is actually a ROA #
 # xₒ = deg2rad.([0., 25.])
 # state_traj = compute_traj(xₒ, 100, weights, net_dict)
 # scatter!(plt_in1, rad2deg.(state_traj[1,:]), rad2deg.(state_traj[2,:]))
 
 # Find one step reachable set from max ellipsoidal ROA in polytpe #
 Q̄ = forward_reach_ellipse(Q, fp, fp_dict)
-# plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q̄), check_posdef=false))
+plot!(plt_in1, (180/π)*Ellipsoid(fp, α*inv(Q̄), check_posdef=false))
 
-# Find polytope that lies between these ellipsoids #
-Aₛ, bₛ = intermediate_polytope(Q, Q̄, α, fp; max_constraints=100)
-# plot!(plt_in1,  (180/π)*HPolytope(constraints_list(Aₛ, bₛ)))
+# Find Polytopic ROA via SDP method # 
+# A_roa, b_roa = polytope_roa_sdp(Aₓ, bₓ, C, Q̄, α, fp; max_constraints=100)
+# plot!(plt_in1,  (180/π)*HPolytope(A_roa, b_roa), label="ROA")
+# plot!(plt_in1,  (180/π)*HPolytope(A_roa*inv(C), b_roa + A_roa*inv(C)*d), label="ROA_+")
+
+# Find Polytopic ROA via Sylvester method # 
+# A_roa, b_roa = polytope_roa_slyvester(Aₓ, bₓ, C, fp; constraints=10)
+
+# Sample P s.t. P .≥ 0 && P*1 ≤ 1
+constraints = 10
+λ_c, vecs_c = eigen(C)
+P = sample_P(λ_c, constraints)
+
+# Solve Sylvester equation PF + F(-C) = 0
+F = sylvc(P, -C, zeros(constraints, size(C,2)))
+
+
+
+
+
+
+
 
 # # Perform backward reachablity on this polytope to approximate maximal ROA #
 # copies_chain = 5 # copies = 1 is original network
@@ -162,10 +184,12 @@ Aₛ, bₛ = intermediate_polytope(Q, Q̄, α, fp; max_constraints=100)
 # plt_convergence = convergence(fp, state2backward_chain[1], weights, net_dict, 150)
 
 # Compute polytopic ROA #
-region = fp_dict[fp]
-Aₓ, bₓ = region[1]
-C, d = region[2]
-invariant_polytope(Aₓ, bₓ, Aₛ, bₛ, C)
+# invariant_polytope(Aₓ, bₓ, Aₛ, bₛ, C)
+
+
+
+
+
 
 
 
