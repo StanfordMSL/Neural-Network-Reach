@@ -124,3 +124,72 @@ function pendulum_net(filename::String, copies::Int64)
 	return weights, net_dict
 end
 
+
+# Load networks given as .mat files that were obtained from extract_onnx_params.py
+function load_test_small()
+	B0 = [1.5; 1.5]
+	W2 = [3.0 3.0]
+	B2 = [3.5]
+	W0 = [1.0; 1.0]
+	B1 = [2.5; 2.5]
+	W1 = [2.0 2.0; 2.0 2.0]
+
+	# Construct augmented weights. 
+	weights = Vector{Array{Float64,2}}(undef, 3)
+	weights[1] = vcat(hcat(W0, B0), reshape(zeros(size(W0,2)+1),1,:))
+	weights[1][end,end] = 1
+
+	weights[2] = vcat(hcat(W1, B1), reshape(zeros(size(W1,2)+1),1,:))
+	weights[2][end,end] = 1
+
+	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
+	weights[end] = hcat(W2, B2)
+
+	
+	return weights
+end
+
+
+function load_test_tiny()
+	W0 = [1.0]
+	B0 = [0.0]
+	W1 = [1.0]
+	B1 = [0.0]
+
+	# Construct augmented weights. 
+	weights = Vector{Array{Float64,2}}(undef, 2)
+	weights[1] = [1.0 0.0; 0.0 1.0]
+	weights[2] = [1.0 0.0]
+
+	return weights
+end
+
+
+# Load networks given as .mat files that were obtained from extract_onnx_params.py
+function load_mat_onnx_test(filename)
+	vars = matread(filename)
+	weight = r"MatMul_W"
+	bias = r"Add_B"
+
+	# Determine number of layers
+	num_layers = 0
+	for key in keys(vars)
+		occursin(weight, key) ? num_layers += 1 : nothing
+	end
+
+	# Construct augmented weights. 
+	weights = Vector{Array{Float64,2}}(undef, num_layers)
+	for i in 1:(num_layers-1)
+		w = vars[string("Operation_", i, "_MatMul_W")]
+		b = vec(vars[string("Operation_", i, "_Add_B")])
+
+		weights[i] = vcat(hcat(w, b), reshape(zeros(size(w,2)+1),1,:))
+		weights[i][end,end] = 1
+	end
+
+	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
+	w = vars[string("linear_", num_layers, "_MatMul_W")]
+	b = vec(vars[string("linear_", num_layers, "_Add_B")])
+	weights[end] = hcat(w, b)
+	return weights
+end

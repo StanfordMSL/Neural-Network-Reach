@@ -1,4 +1,4 @@
-using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib
+using LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib
 include("load_networks.jl")
 include("unique_custom.jl")
 
@@ -515,9 +515,9 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 			for k in 1:length(Aₒ)
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
-					println("Found input that maps to target set!")
-					@show ap
-					return ap2input, ap2output, ap2map, ap2backward
+					verification_res = "violated"
+					println("Property violated.")
+					return ap2input, ap2output, ap2map, ap2backward, verification_res
 				end
 			end
 		end
@@ -542,11 +542,10 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end
-	verification ? println("No input maps to the target set.") : nothing
-	println("Rank deficient maps: ", rank_deficient)
-	total_lps = saved_lps + solved_lps
-	println("Total solved LPs: ", solved_lps)
-	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
-	return ap2input, ap2output, ap2map, ap2backward
+	if verification
+		verification_res = "holds"
+		println("Property holds.")
+	end
+	return ap2input, ap2output, ap2map, ap2backward, verification_res
 end
 

@@ -73,7 +73,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-weights, nnet, net_dict = acas_net_nnet(5,6)
+weights, nnet, net_dict = acas_net_nnet(5,7)
 property = "acas property 3"
 Aᵢ, bᵢ = input_constraints_acas(weights, property, net_dict=net_dict)
 Aₒ, bₒ = output_constraints_acas(weights, property, net_dict=net_dict)
