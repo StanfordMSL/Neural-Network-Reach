@@ -3,20 +3,86 @@
 # $ julia --project=. vnn_run.jl "test/test_small.mat" "test/test_small.vnnlib" "test/test_small_output.txt"
 # $ julia --project=. vnn_run.jl "test/test_sat.mat" "test/test_prop.vnnlib" "test/test_sat_output.txt"
 # $ julia --project=. vnn_run.jl "test/test_unsat.mat" "test/test_prop.vnnlib" "test/test_unsat_output.txt"
-
+# $ julia --project=. vnn_run.jl "acasxu/ACASXU_run2a_5_7_batch_2000.mat" "acasxu/prop_3.vnnlib" "acasxu/prop_3_output.txt" 20
+# $ julia --project=. vnn_run.jl "mnistfc/mnist-net_256x2.mat" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
+# $ julia --project=. vnn_run.jl "mnistfc/mnist-net_256x6.mat" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
 
 
 
 include("reach.jl")
+include("load_vnn.jl")
 
 
-# Solve on small instance to compile functions
+function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
+	try
+		for i in 1:length(b_in)
+			ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, A_in[i], b_in[i], A_out, b_out, reach=false, back=false, verification=true)
+			if verification_res == "violated"
+				# Write result to output_filename
+				open(output_filename, "w") do io
+			   write(io, verification_res)
+				end
+			   return nothing
+			end
+		end
+
+		# Write result to output_filename
+		open(output_filename, "w") do io
+	   write(io, verification_res)
+		end
+
+	catch y
+		if isa(y, InterruptException)
+			println("timeout")
+			open(output_filename, "w") do io
+		   write(io, "timeout")
+			end
+		else
+			@show y
+			open(output_filename, "w") do io
+			println("unknown")
+		   write(io, "unknown")
+			end
+		end
+	end
+   return nothing
+end
+
+macro timeout(expr, seconds=-1, cb=(tsk) -> Base.throwto(tsk, InterruptException()))
+    quote
+        tsk = @task $expr
+        schedule(tsk)
+
+        if $seconds > -1
+            Timer((timer) -> $cb(tsk), $seconds)
+        end
+
+        return fetch(tsk)
+    end
+end
+
+
+
+# Solve on small problem to compile functions
+function small_compile()
+	weights = random_net(3, 2, 10, 5) # (in_d, out_d, hdim, layers)
+	Aᵢ = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
+	bᵢ = [5., 5., 5., 5., 8., 8., 8., 8.]
+	Aₒ = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
+	bₒ = [101., -100., 101., -100.]
+	ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=true)
+	return nothing
+end
+
+# Solve on small problem to compile functions
+small_compile()
 
 
 # Load network and property
 mat_onnx_filename = ARGS[1]
 vnnlib_filename = ARGS[2]
 output_filename = ARGS[3]
+time_limit = parse(Float64, ARGS[4])
 
 # weights, nnet, net_dict = nnet_load(nnet_filename)
 if mat_onnx_filename == "test/test_tiny.mat" 
@@ -24,50 +90,24 @@ if mat_onnx_filename == "test/test_tiny.mat"
 elseif mat_onnx_filename == "test/test_small.mat"
 	weights = load_test_small()
 elseif mat_onnx_filename == "test/test_sat.mat" || mat_onnx_filename == "test/test_unsat.mat"
-	weights = load_mat_onnx_test(mat_onnx_filename)
+	weights = load_mat_onnx_test_acas(mat_onnx_filename)
 elseif mat_onnx_filename[1:6] == "acasxu"
-	weights = nothing
+	weights = load_mat_onnx_test_acas(mat_onnx_filename)
 elseif mat_onnx_filename[1:7] == "mnistfc"
-	weights = nothing
+	weights = load_mat_onnx_test_mnist(mat_onnx_filename)
 else
 	# skip benchmark
 end
 
-# From vnnlib_filename parse constraints
-if vnnlib_filename == "test/test_tiny.vnnlib" || vnnlib_filename == "test/test_small.vnnlib"
-	Aᵢ, bᵢ = Matrix{Float64}(undef, 2, 1), Vector{Float64}(undef, 2)
-	Aᵢ[1,1] = -1.; Aᵢ[2,1] = 1.
-	bᵢ[1] = 1.; bᵢ[2] = 1. 
-	Aₒ, bₒ =Matrix{Float64}(undef, 2, 1), Vector{Float64}(undef, 2)
-	Aₒ[1,1] = -1.
-	bₒ[1] = 100.
-elseif vnnlib_filename == "test/test_prop.vnnlib"
-	Aᵢ = Float64.([ -1  0  0  0  0; # ρ
-		   1  0  0  0  0; # ρ
-		   0 -1  0  0  0; # θ
-		   0  1  0  0  0; # θ
-		   0  0 -1  0  0; # ψ
-		   0  0  1  0  0; # ψ
-		   0  0  0 -1  0; # v_own
-		   0  0  0  1  0; # v_own
-		   0  0  0  0 -1; # v_int
-		   0  0  0  0  1]) # v_int
-	bᵢ = [0.30353115613746867, -0.29855281193475053, 0.009549296585513092, 0.009549296585513092, -0.4933803235848431, 0.49999999998567607, -0.3, 0.5, -0.3, 0.5]
 
-	Aₒ = Float64.([1 -1 0 0 0;
-		 1 0 -1 0 0;
-		 1 0 0 -1 0;
-		 1 0 0 0 -1])
-	bₒ = [0., 0., 0., 0.]
-end
-
+A_in, b_in, A_out, b_out = get_constraints(vnnlib_filename)
 
 # Solve verification problem
-ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=true)
+@timeout solve_problem(weights, A_in, b_in, A_out, b_out, output_filename) time_limit
 
 
-# Write result to output_filename
-open(output_filename, "w") do io
-   write(io, verification_res)
-end
+
+nothing
+
+
 

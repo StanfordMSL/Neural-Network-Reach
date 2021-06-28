@@ -166,7 +166,7 @@ end
 
 
 # Load networks given as .mat files that were obtained from extract_onnx_params.py
-function load_mat_onnx_test(filename)
+function load_mat_onnx_test_acas(filename)
 	vars = matread(filename)
 	weight = r"MatMul_W"
 	bias = r"Add_B"
@@ -190,6 +190,34 @@ function load_mat_onnx_test(filename)
 	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
 	w = vars[string("linear_", num_layers, "_MatMul_W")]
 	b = vec(vars[string("linear_", num_layers, "_Add_B")])
+	weights[end] = hcat(w, b)
+	return weights
+end
+
+
+function load_mat_onnx_test_mnist(filename)
+	vars = matread(filename)
+	weight = r"weight"
+	bias = r"bias"
+
+	# Determine number of layers
+	num_layers = 0
+	for key in keys(vars)
+		occursin(weight, key) ? num_layers += 1 : nothing
+	end
+
+	# Construct augmented weights. 
+	weights = Vector{Array{Float64,2}}(undef, num_layers)
+	for (i,j) in enumerate(0:2:2*(num_layers-2))
+		w = vars[string("layers.", j, ".weight")]'
+		b = vec(vars[string("layers.", j, ".bias")])
+		weights[i] = vcat(hcat(w, b), reshape(zeros(size(w,2)+1),1,:))
+		weights[i][end,end] = 1
+	end
+
+	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
+	w = vars[string("layers.", 2*(num_layers-1), ".weight")]'
+	b = vec(vars[string("layers.", 2*(num_layers-1), ".bias")])
 	weights[end] = hcat(w, b)
 	return weights
 end
