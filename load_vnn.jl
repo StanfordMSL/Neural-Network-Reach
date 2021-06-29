@@ -249,8 +249,7 @@ function get_constraints(vnnlib_filename)
 
 		return [Aᵢ], [bᵢ], [Aₒ], [bₒ]
 	elseif vnnlib_filename[1:7] == "mnistfc"
-		A_in, b_in, A_out, b_out = parse_vnn(vnnlib_filename)
-		return [Aᵢ], [bᵢ], [Aₒ], [bₒ]
+		return parse_vnn(vnnlib_filename)
 	else
 		@show vnnlib_filename
 		println("Invalid vnnlib file!")

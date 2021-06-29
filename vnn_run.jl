@@ -1,20 +1,11 @@
-# TO RUN: 
-# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_tiny.onnx" "test/test_tiny.vnnlib" "test/test_tiny_output.txt" 200
-# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_small.onnx" "test/test_small.vnnlib" "test/test_small_output.txt" 200
-# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_sat.onnx" "test/test_prop.vnnlib" "test/test_sat_output.txt" 200
-# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_unsat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "test/test_unsat_output.txt" 200
-# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/acasxu/ACASXU_run2a_5_7_batch_2000.onnx" "acasxu/prop_3.vnnlib" "acasxu/prop_3_output.txt" 200
-# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x2.onnx" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
-# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x6.onnx" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
-
-# $ julia --project=. "${project_path}/vnn_run.jl" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"
-
-
-
-
-
-
-
+# TO RUN from home directory
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_tiny.onnx" "vnncomp2021/benchmarks/vnncomp2021/benchmarks/test/test_tiny.vnnlib" "Neural-Network-Reach/test/test_tiny_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_small.onnx" "vnncomp2021/benchmarks/vnncomp2021/benchmarks/test/test_small.vnnlib" "Neural-Network-Reach/test/test_small_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_sat.onnx" "vnncomp2021/benchmarks/vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_sat_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_unsat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_unsat_output.txt" 10
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/acasxu/ACASXU_run2a_5_7_batch_2000.onnx" "vnncomp2021/benchmarks/acasxu/prop_3.vnnlib" "Neural-Network-Reach/acasxu/prop_3_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x2.onnx" "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x6.onnx" "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 20
 
 include("reach.jl")
 include("load_vnn.jl")
@@ -83,14 +74,7 @@ end
 # Solve on small problem to compile functions
 small_compile()
 
-
-# Load network and property
-# onnx_filename = "vnncomp2021/benchmarks/test/test_unsat.onnx"
-# mat_onnx_filename = string(onnx_filename[1:end-4], "mat")
-# vnnlib_filename = "vnncomp2021/benchmarks/test/test_prop.vnnlib"
-# output_filename = "test/test_unsat_output.txt"
-# time_limit = 10
-
+# Load in arguments
 onnx_filename = ARGS[1]
 mat_onnx_filename = string(onnx_filename[1:end-4], "mat")
 vnnlib_filename = ARGS[2]
@@ -101,7 +85,7 @@ prefix = "vnncomp2021/benchmarks/"
 mat_filename = mat_onnx_filename[length(prefix)+1:end]
 vnnlib_filename = vnnlib_filename[length(prefix)+1:end]
 
-# weights, nnet, net_dict = nnet_load(nnet_filename)
+# Get network weights
 if mat_filename == "test/test_tiny.mat" 
 	weights = load_test_tiny()
 elseif mat_filename == "test/test_small.mat"
