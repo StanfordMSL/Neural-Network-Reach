@@ -27,23 +27,25 @@ function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
 			   return nothing
 			end
 		end
-
-		# Write result to output_filename
-		open(output_filename, "w") do io
-	   write(io, verification_res)
+		if verification_res == "holds"
+			# Write result to output_filename
+			open(output_filename, "w") do io
+		    write(io, verification_res)
+			end
+			return nothing
 		end
 
 	catch y
 		if isa(y, InterruptException)
 			println("timeout")
 			open(output_filename, "w") do io
-		   write(io, "timeout")
+		    write(io, "timeout")
 			end
 		else
 			@show y
 			open(output_filename, "w") do io
 			println("unknown")
-		   write(io, "unknown")
+		    write(io, "unknown")
 			end
 		end
 	end
