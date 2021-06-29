@@ -7,6 +7,8 @@
 # $ julia --project=. vnn_run.jl "mnistfc/mnist-net_256x2.mat" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
 # $ julia --project=. vnn_run.jl "mnistfc/mnist-net_256x6.mat" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
 
+# $ julia --project=. "${project_path}/vnn_run.jl" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"
+
 
 
 include("reach.jl")
@@ -20,7 +22,7 @@ function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
 			if verification_res == "violated"
 				# Write result to output_filename
 				open(output_filename, "w") do io
-			   write(io, verification_res)
+			    write(io, verification_res)
 				end
 			   return nothing
 			end
@@ -79,35 +81,27 @@ small_compile()
 
 
 # Load network and property
-mat_onnx_filename = ARGS[1]
+onnx_filename = ARGS[1]
+mat_onnx_filename = string(onnx_filename[1:end-], ".mat")
 vnnlib_filename = ARGS[2]
 output_filename = ARGS[3]
 time_limit = parse(Float64, ARGS[4])
 
 # weights, nnet, net_dict = nnet_load(nnet_filename)
-if mat_onnx_filename == "test/test_tiny.mat" 
+if mat_onnx_filename == "test_tiny.mat" 
 	weights = load_test_tiny()
-elseif mat_onnx_filename == "test/test_small.mat"
+elseif mat_onnx_filename == "test_small.mat"
 	weights = load_test_small()
-elseif mat_onnx_filename == "test/test_sat.mat" || mat_onnx_filename == "test/test_unsat.mat"
+elseif mat_onnx_filename == "test_sat.mat" || mat_onnx_filename == "test_unsat.mat"
 	weights = load_mat_onnx_test_acas(mat_onnx_filename)
-elseif mat_onnx_filename[1:6] == "acasxu"
-	weights = load_mat_onnx_test_acas(mat_onnx_filename)
-elseif mat_onnx_filename[1:7] == "mnistfc"
-	weights = load_mat_onnx_test_mnist(mat_onnx_filename)
+elseif mat_onnx_filename[1:6] == "ACASXU"
+	weights = load_mat_onnx_acas(mat_onnx_filename)
+elseif mat_onnx_filename[1:9] == "mnist-net"
+	weights = load_mat_onnx_mnist(mat_onnx_filename)
 else
 	# skip benchmark
+	error("Got unexpected ONNX filename!")
 end
 
-
 A_in, b_in, A_out, b_out = get_constraints(vnnlib_filename)
-
-# Solve verification problem
 @timeout solve_problem(weights, A_in, b_in, A_out, b_out, output_filename) time_limit
-
-
-
-nothing
-
-
-

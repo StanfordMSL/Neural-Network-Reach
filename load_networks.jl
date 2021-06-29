@@ -68,6 +68,7 @@ end
 
 # Load Pendulum Networks #
 function pendulum_net(filename::String, copies::Int64)
+
 	model = matread(filename)
 	num_layers = length(model["weights"])
 	layer_sizes = vcat(size(model["weights"][1], 2), [length(model["biases"][i]) for i in 1:num_layers])
@@ -167,7 +168,7 @@ end
 
 # Load networks given as .mat files that were obtained from extract_onnx_params.py
 function load_mat_onnx_test_acas(filename)
-	vars = matread(filename)
+	vars = matread(string("test/", filename))
 	weight = r"MatMul_W"
 	bias = r"Add_B"
 
@@ -195,8 +196,38 @@ function load_mat_onnx_test_acas(filename)
 end
 
 
-function load_mat_onnx_test_mnist(filename)
-	vars = matread(filename)
+# Load networks given as .mat files that were obtained from extract_onnx_params.py
+function load_mat_onnx_acas(filename)
+	vars = matread(string("acasxu/", filename))
+	weight = r"MatMul_W"
+	bias = r"Add_B"
+
+	# Determine number of layers
+	num_layers = 0
+	for key in keys(vars)
+		occursin(weight, key) ? num_layers += 1 : nothing
+	end
+
+	# Construct augmented weights. 
+	weights = Vector{Array{Float64,2}}(undef, num_layers)
+	for i in 1:(num_layers-1)
+		w = vars[string("Operation_", i, "_MatMul_W")]
+		b = vec(vars[string("Operation_", i, "_Add_B")])
+
+		weights[i] = vcat(hcat(w, b), reshape(zeros(size(w,2)+1),1,:))
+		weights[i][end,end] = 1
+	end
+
+	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
+	w = vars[string("linear_", num_layers, "_MatMul_W")]
+	b = vec(vars[string("linear_", num_layers, "_Add_B")])
+	weights[end] = hcat(w, b)
+	return weights
+end
+
+
+function load_mat_onnx_mnist(filename)
+	vars = matread(string("mnistfc/", filename))
 	weight = r"weight"
 	bias = r"bias"
 

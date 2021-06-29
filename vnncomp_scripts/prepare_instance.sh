@@ -1,8 +1,4 @@
-#!/bin/bash
-# example prepare_instance.sh script for VNNCOMP for nnenum # four arguments, first is "v1", second is a benchmark category identifier string such as "acasxu", third is path to the .onnx file and fourth is path to .vnnlib file
-# Stanley Bak, Feb 2021
-
-TOOL_NAME=simple_adv_gen
+TOOL_NAME=rpm
 VERSION_STRING=v1
 
 # check arguments
@@ -18,12 +14,15 @@ VNNLIB_FILE=$4
 echo "Preparing $TOOL_NAME for benchmark instance in category '$CATEGORY' with onnx file '$ONNX_FILE' and vnnlib file '$VNNLIB_FILE'"
 
 # kill any zombie processes
-killall -q python3
+killall -q julia
+#killall -q python
 
 # script returns a 0 exit code if successful. If you want to skip a benchmark category you can return non-zero.
-#if [ "$CATEGORY" = "test" -o "$CATEGORY" == "acasxu" ]
-#then
-#	exit 0
-#fi
+# Only run on acasxu and mnistfc
+if [ "$CATEGORY" = "test" -o "$CATEGORY" == "acasxu" -o "$CATEGORY" == "mnistfc"]
+then
+	# All instance preparation is taken care of in my vnn_run.jl file
+	exit 0
+fi
 
-exit 0
+exit 1

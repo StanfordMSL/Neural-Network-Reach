@@ -48,7 +48,7 @@ function parse_vnn(filename)
         end
     end
 
-    @show label
+    # @show label
 
     # Sanity check
     if num_inputs != 784 || num_outputs != 10 || num_input_cons != 1568 || num_output_cons != 9 || length(lbs) != 784 || length(ubs) != 784

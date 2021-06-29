@@ -1,8 +1,3 @@
-#!/bin/bash
-# example run_benchmark.sh script for VNNCOMP for simple_adversarial_generator (https://github.com/stanleybak/simple_adversarial_generator) 
-# six arguments, first is "v1", second is a benchmark category itentifier string such as "acasxu", third is path to the .onnx file, fourth is path to .vnnlib file, fifth is a path to the results file, and sixth is a timeout in seconds.
-# Stanley Bak, Feb 2021
-
 VERSION_STRING=v1
 
 # check arguments
@@ -20,8 +15,16 @@ TIMEOUT=$6
 echo "Running benchmark instance in category '$CATEGORY' with onnx file '$ONNX_FILE', vnnlib file '$VNNLIB_FILE', results file $RESULTS_FILE, and timeout $TIMEOUT"
 
 # setup environment variable for tool (doing it earlier won't be persistent with docker)"
-DIR=$(dirname $(dirname $(realpath $0)))
-export PYTHONPATH="$PYTHONPATH:$DIR/src"
+#DIR=$(dirname $(dirname $(realpath $0)))
+#export PYTHONPATH="$PYTHONPATH:$DIR/src"
 
 # run the tool to produce the results file
-python3 -m agen.randgen "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" 100
+#julia --project=. "vnn_run.jl" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"
+
+
+# run the tool to produce the results file
+script_name=$0
+script_path=$(dirname "$0")
+project_path=$(dirname "$script_path")
+julia --project="${project_path}" "${project_path}/vnn_run.jl" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"
+exit 0
