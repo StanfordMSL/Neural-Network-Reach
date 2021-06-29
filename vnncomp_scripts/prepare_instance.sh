@@ -19,7 +19,7 @@ killall -q julia
 
 # script returns a 0 exit code if successful. If you want to skip a benchmark category you can return non-zero.
 # Only run on acasxu and mnistfc
-if [ "$CATEGORY" == "test" -o "$CATEGORY" == "acasxu" -o "$CATEGORY" == "mnistfc" ]
+if [ "$CATEGORY" = "test" -o "$CATEGORY" = "acasxu" -o "$CATEGORY" = "mnistfc" ]
 then
 	# All instance preparation is taken care of in my vnn_run.jl file
 	exit 0
