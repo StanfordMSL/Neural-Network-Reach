@@ -104,6 +104,8 @@ elseif mat_filename[1:7] == "mnistfc"
 else
 	# skip benchmark
 	println("Got unexpected ONNX filename!")
+	@show mat_filename
+	weights = nothing
 end
 
 A_in, b_in, A_out, b_out = get_constraints(vnnlib_filename)
