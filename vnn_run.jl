@@ -82,7 +82,7 @@ small_compile()
 
 # Load network and property
 onnx_filename = ARGS[1]
-mat_onnx_filename = string(onnx_filename[1:end-4], ".mat")
+mat_onnx_filename = string(onnx_filename[1:end-4], "mat")
 vnnlib_filename = ARGS[2]
 output_filename = ARGS[3]
 time_limit = parse(Float64, ARGS[4])
