@@ -19,6 +19,7 @@ function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
 	try
 		for i in 1:length(b_in)
 			ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, A_in[i], b_in[i], A_out, b_out, reach=false, back=false, verification=true)
+			println("Inner verif res: ", verification_res)
 			if verification_res == "violated"
 				# Write result to output_filename
 				open(output_filename, "w") do io
@@ -27,13 +28,12 @@ function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
 			   return nothing
 			end
 		end
-		if verification_res == "holds"
-			# Write result to output_filename
-			open(output_filename, "w") do io
-		    write(io, verification_res)
-			end
-			return nothing
+		println("Outer verif res: ", verification_res)
+		# Write result to output_filename
+		open(output_filename, "w") do io
+	    write(io, verification_res)
 		end
+		return nothing
 
 	catch y
 		if isa(y, InterruptException)
