@@ -87,20 +87,23 @@ vnnlib_filename = ARGS[2]
 output_filename = ARGS[3]
 time_limit = parse(Float64, ARGS[4])
 
+prefix = "vnncomp2021/benchmarks/"
+mat_filename = mat_onnx_filename[length(prefix)+1:end]
+
 # weights, nnet, net_dict = nnet_load(nnet_filename)
-if mat_onnx_filename == "test_tiny.mat" 
+if mat_filename == "test/test_tiny.mat" 
 	weights = load_test_tiny()
-elseif mat_onnx_filename == "test_small.mat"
+elseif mat_filename == "test/test_small.mat"
 	weights = load_test_small()
-elseif mat_onnx_filename == "test_sat.mat" || mat_onnx_filename == "test_unsat.mat"
-	weights = load_mat_onnx_test_acas(mat_onnx_filename)
-elseif mat_onnx_filename[1:6] == "ACASXU"
-	weights = load_mat_onnx_acas(mat_onnx_filename)
-elseif mat_onnx_filename[1:9] == "mnist-net"
-	weights = load_mat_onnx_mnist(mat_onnx_filename)
+elseif mat_filename == "test/test_sat.mat" || mat_filename == "test/test_unsat.mat"
+	weights = load_mat_onnx_test_acas(mat_filename)
+elseif mat_filename[1:6] == "acasxu"
+	weights = load_mat_onnx_acas(mat_filename)
+elseif mat_filename[1:7] == "mnistfc"
+	weights = load_mat_onnx_mnist(mat_filename)
 else
 	# skip benchmark
-	error("Got unexpected ONNX filename!")
+	println("Got unexpected ONNX filename!")
 end
 
 A_in, b_in, A_out, b_out = get_constraints(vnnlib_filename)
