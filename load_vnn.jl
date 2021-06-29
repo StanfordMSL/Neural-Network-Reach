@@ -252,8 +252,8 @@ function get_constraints(vnnlib_filename)
 		A_in, b_in, A_out, b_out = parse_vnn(vnnlib_filename)
 		return [Aᵢ], [bᵢ], [Aₒ], [bₒ]
 	else
-		println("Invalid vnnlib file!")
 		@show vnnlib_filename
+		println("Invalid vnnlib file!")
 		return [], [], [], []
 	end
 

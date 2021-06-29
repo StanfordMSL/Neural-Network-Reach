@@ -1,13 +1,18 @@
 # TO RUN: 
-# $ julia --project=. vnn_run.jl "test/test_tiny.mat" "test/test_tiny.vnnlib" "test/test_tiny_output.txt"
-# $ julia --project=. vnn_run.jl "test/test_small.mat" "test/test_small.vnnlib" "test/test_small_output.txt"
-# $ julia --project=. vnn_run.jl "test/test_sat.mat" "test/test_prop.vnnlib" "test/test_sat_output.txt"
-# $ julia --project=. vnn_run.jl "test/test_unsat.mat" "test/test_prop.vnnlib" "test/test_unsat_output.txt"
-# $ julia --project=. vnn_run.jl "acasxu/ACASXU_run2a_5_7_batch_2000.mat" "acasxu/prop_3.vnnlib" "acasxu/prop_3_output.txt" 20
-# $ julia --project=. vnn_run.jl "mnistfc/mnist-net_256x2.mat" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
-# $ julia --project=. vnn_run.jl "mnistfc/mnist-net_256x6.mat" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
+# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_tiny.onnx" "test/test_tiny.vnnlib" "test/test_tiny_output.txt" 200
+# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_small.onnx" "test/test_small.vnnlib" "test/test_small_output.txt" 200
+# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_sat.onnx" "test/test_prop.vnnlib" "test/test_sat_output.txt" 200
+# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/test/test_unsat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "test/test_unsat_output.txt" 200
+# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/acasxu/ACASXU_run2a_5_7_batch_2000.onnx" "acasxu/prop_3.vnnlib" "acasxu/prop_3_output.txt" 200
+# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x2.onnx" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
+# $ julia --project=. vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x6.onnx" "mnistfc/prop_0_0.03.vnnlib" "mnistfc/prop_0_0.03.txt" 200
 
 # $ julia --project=. "${project_path}/vnn_run.jl" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"
+
+
+
+
+
 
 
 
@@ -17,19 +22,16 @@ include("load_vnn.jl")
 
 function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
 	try
+		verification_res = "unknown"
 		for i in 1:length(b_in)
 			ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, A_in[i], b_in[i], A_out, b_out, reach=false, back=false, verification=true)
-			println("Inner verif res: ", verification_res)
 			if verification_res == "violated"
-				# Write result to output_filename
 				open(output_filename, "w") do io
 			    write(io, verification_res)
 				end
 			   return nothing
 			end
 		end
-		println("Outer verif res: ", verification_res)
-		# Write result to output_filename
 		open(output_filename, "w") do io
 	    write(io, verification_res)
 		end
@@ -83,6 +85,12 @@ small_compile()
 
 
 # Load network and property
+# onnx_filename = "vnncomp2021/benchmarks/test/test_unsat.onnx"
+# mat_onnx_filename = string(onnx_filename[1:end-4], "mat")
+# vnnlib_filename = "vnncomp2021/benchmarks/test/test_prop.vnnlib"
+# output_filename = "test/test_unsat_output.txt"
+# time_limit = 10
+
 onnx_filename = ARGS[1]
 mat_onnx_filename = string(onnx_filename[1:end-4], "mat")
 vnnlib_filename = ARGS[2]
