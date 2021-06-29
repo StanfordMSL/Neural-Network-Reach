@@ -253,6 +253,7 @@ function get_constraints(vnnlib_filename)
 		return [Aᵢ], [bᵢ], [Aₒ], [bₒ]
 	else
 		println("Invalid vnnlib file!")
+		@show vnnlib_filename
 		return [], [], [], []
 	end
 

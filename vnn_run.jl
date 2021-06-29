@@ -89,6 +89,7 @@ time_limit = parse(Float64, ARGS[4])
 
 prefix = "vnncomp2021/benchmarks/"
 mat_filename = mat_onnx_filename[length(prefix)+1:end]
+vnnlib_filename = vnnlib_filename[length(prefix)+1:end]
 
 # weights, nnet, net_dict = nnet_load(nnet_filename)
 if mat_filename == "test/test_tiny.mat" 
