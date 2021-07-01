@@ -35,7 +35,7 @@ end
 # Fixed point p satisfies: C̄p + d̄ = p ⟹ (I - C̄)p = d̄.
 # p must lie in the polytope for which the affine map is valid
 # The raw neural network has polytopes Ax̄ ≤ b  ⟹  A(Aᵢₙx + bᵢₙ) ≤ b  ⟹  AAᵢₙx ≤ b - Abᵢₙ  ⟹  Ā = AAᵢₙ, b̄ = b - Abᵢₙ
-function find_fixed_points(state2map, state2input, net_dict)
+function find_fixed_points(state2map, state2input, weights, net_dict)
 	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
 	dim = net_dict["input_size"]
@@ -50,10 +50,10 @@ function find_fixed_points(state2map, state2input, net_dict)
 		b̄ = b - A*bᵢₙ
 
 		if rank(I - C̄) == dim
-			p = inv(I - C̄) * d̄
-			if in_polytope(p, Ā, b̄)
-				push!(fixed_points, p)
-				fp_dict[p] = [(Ā, b̄), (C̄, d̄)]
+			fp = inv(I - C̄) * d̄
+			if in_polytope(fp, Ā, b̄) && (eval_net(fp, weights, net_dict, 1) ≈ fp) # second condition is sanity check
+				push!(fixed_points, fp)
+				fp_dict[fp] = [(Ā, b̄), (C̄, d̄)]
 			end
 		else
 			error("Non-unique fixed point! Make more general")
@@ -133,6 +133,15 @@ function intermediate_polytope(Q̄, α, fp, Aₓ, bₓ, C; max_constraints=100)
 	return A, b + A*fp # return constraints in the x frame
 end
 
+# generate random polytope that contains the fixed point
+# we have that x̄ = x - fp
+function random_polytope(fp, num_constraints)
+	F = [bound_r(-1, 1) for i in 1:num_constraints, j in 1:length(fp)]
+	b = ones(num_constraints)
+	
+	return F, b + F*fp # return constraints in the x frame
+end
+
 # Plot convergence over time of some points to a fixed point
 function convergence(fp, state2backward, weights, net_dict, traj_length)
 	plt = plot(title="Distance to Fixed Point vs Time-Step", xlabel="Time-Step", ylabel="Distance")
@@ -153,8 +162,8 @@ end
 function solve_sdp_jump(Fₒ, C)
 	n_cons, dim = size(Fₒ)
 	model = Model(COSMO.Optimizer)
-	set_optimizer_attribute(model, "max_iter", 7000)
-	set_optimizer_attribute(model, "verbose", true)
+	set_optimizer_attribute(model, "max_iter", 4000)
+	set_optimizer_attribute(model, "verbose", false)
 	
 	@variable(model, Q_diag[1:n_cons])
 	Q = Matrix(Diagonal(Q_diag))
@@ -165,7 +174,7 @@ function solve_sdp_jump(Fₒ, C)
 	
 	@constraint(model, Q*Fₒ*C - R'*Fₒ .== zeros(n_cons, dim))
 	@SDconstraint(model, [Q R; R' Q] ≥ 0)
-	@constraint(model, Q_diag .≥ 1e1*ones(n_cons))
+	@constraint(model, Q_diag .≥ 10.0*ones(n_cons))
 	# @constraint(model, Q_diag .≤ 1e6*ones(n_cons))
 	@constraint(model, R .≥ zeros(n_cons, n_cons))
 	
@@ -229,34 +238,10 @@ function invariant_polytope(Aₓ, bₓ, Aₒ, bₒ, C)
 	Fₒ = vcat([reshape(Aₒ[i,:] ./ bₒ[i], (1, :)) for i in 1:length(bₒ)]...) 
 	Fₒ = vcat(Fₒ, Fₓ)
 
-	# Λ ∈ R^(n_cons, n_cons), Diagonal
-	# P ∈ R^(n_cons, n_cons), PSD
-	# Pₒ = inv(Λ)*P*Λ
-	# Q ∈ R^(n_cons, n_cons), Positive, Diagonal
-	# R = PₒQ, PSD
-	# Q ∈ R^(n_cons, n_cons), Diagonal
-	# H = ΛQΛ ∈ R^(n_cons, n_cons), Positive, Diagonal
-	# Pₒ_opt = R_opt*inv(Q_opt)
-
 	# solve SDP
 	Q_jmp, R_jmp = solve_sdp_jump(Fₒ, C)
-	# Q_cvx, R_cvx = solve_sdp_cvx(Fₒ, C)
-	# println("\n\n")
-	# @show norm(Q_jmp - Q_cvx)
-	# @show norm(R_jmp - R_cvx)
-	# println("\n\n")
-
-	# @show Q_cvx
-	# @show Q_jmp
-
-	# with CVX variables
-	# Pₒ_cvx = R_cvx*inv(Q_cvx)
-
-	# with JuMP variables
 	Pₒ_jmp = R_jmp*inv(Q_jmp)
-
 	λ = solve_lp(Pₒ_jmp, n_cons, n_consₓ)
-
 	F_res = inv(Diagonal(λ))*Fₒ
 
 	# Verify that found polytope is invariant
@@ -280,7 +265,6 @@ function is_invariant(F, C)
 
 	@constraint(model, P.≥ zeros(n_cons, n_cons))
 	@constraint(model, P*F .== F*C )
-	# @constraint(model, P*F*inv(C) .== F) # this is the same as ^^
 	@constraint(model, P*ones(n_cons).≤ ones(n_cons))
 	
 	optimize!(model)
@@ -294,9 +278,9 @@ end
 
 
 # Attempt to find a polytopic ROA via the SDP method
- function polytope_roa_sdp(Aₓ, bₓ, C, Q̄, α, fp; max_constraints=100)
+ function polytope_roa_sdp(Aₓ, bₓ, C, fp, num_constraints)
  	# Generate initial polytope
- 	Aₛ, bₛ = intermediate_polytope(Q̄, α, fp, Aₓ, bₓ, C; max_constraints=max_constraints)
+ 	Aₛ, bₛ = random_polytope(fp, num_constraints)
 
  	# Put constraints in x̄ frame
 	Aₓ_ = Aₓ
@@ -308,52 +292,42 @@ end
 	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
  end
 
-# Sample P matrix s.t. P .≥ 0 && P*1 ≤ 1
-function sample_P(λ_c, constraints)
-	# Each row is rand() * a randomly sampled vector from the unit simplex
-	P = Matrix{Float64}(undef, constraints, constraints)
-	for row in 1:constraints
-		P[row, :] = rand()*rand(Dirichlet(ones(constraints)))
+
+
+# Given a NN model, number of seed polytope ROA constraints, and number of backward reachability steps, compute ROA
+function find_roa(model, num_constraints, num_steps)
+	weights, net_dict = pendulum_net(model, 1)
+
+	Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
+	Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
+	println("Input set: pendulum")
+
+	# Run algorithm on one-step dynamics
+	@time begin
+	state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
 	end
+	println("Dynamics function has ", length(state2input), " affine regions.") 
 
-	# Sylvester equation has unique solution when P and C have no common eigenvalues
-	vals, vecs = eigen(P)
+	# Find fixed point(s) #
+	fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict) # Fixed point =  [-0.028117297151424497, 0.09680434353994193]
+	fp = fixed_points[1]
+	region = fp_dict[fp]
+	Aₓ, bₓ = region[1]
+	C, d = region[2]
 
-	# Could be dangerous infinite loop
-	if !isempty(intersect(vals, λ_c))
-		println("Eigenvalues intersect, generating new P matrix.")
-		return sample_P(λ_c)
-	else
-		return P
-	end
+	# Find Polytopic ROA via SDP method # 
+	A_roa, b_roa = polytope_roa_sdp(Aₓ, bₓ, C, fp, num_constraints)
 
+	# Perform backward reachability on the seed invariant set
+	weights_chain, net_dict_chain = pendulum_net(model, num_steps)
+	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
+	Aₒ_chain, bₒ_chain = A_roa*Aₒᵤₜ, b_roa - A_roa*bₒᵤₜ
+	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], reach=false, back=true, verification=false)
+	plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
+	plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
+
+	return A_roa, b_roa, state2backward_chain[1], net_dict_chain, plt_in2
 end
-
-# Attempt to find a polytopic ROA via the SDP method
- function polytope_roa_sylvester(Aₓ, bₓ, C, fp; constraints=100)
- 	# Put domain constraints in x̄ frame
-	Aₓ_ = Aₓ
-	bₓ_ = bₓ - Aₓ_*fp
-	Aₛ_ = Aₛ
-	bₛ_ = bₛ - Aₛ_*fp
-
-	# Sample P s.t. P .≥ 0 && P*1 ≤ 1
-	λ_c, vecs_c = eigen(C)
-	P = sample_P(λ_c, constraints)	
-
-	# Solve Sylvester equation PF + F(-C) = 0
-	F = sylvc(P, -C, zeros(constraints, size(C,2)))
-
-	# Grow/shrink polytope roa to fit within domain polytope
-
-
-	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
- end
-
-
-
-
-
 
 
 
@@ -372,37 +346,83 @@ end
 
 
 ## OLD ##
-# Find an i-step invariant set given a fixed point p
-function i_step_invariance(fixed_point, max_steps)
-	for i in 0:max_steps
-		println("\n", i+1)
-		# load neural network
-		copies = i # copies = 0 is original network
-		model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
-		weights, net_dict = pendulum_net(model, copies)
-		state = get_state(fixed_point, weights)
-		num_neurons = sum([length(state[layer]) for layer in 1:length(state)])
+
+# # Sample P matrix s.t. P .≥ 0 && P*1 ≤ 1
+# function sample_P(λ_c, constraints)
+# 	# Each row is rand() * a randomly sampled vector from the unit simplex
+# 	P = Matrix{Float64}(undef, constraints, constraints)
+# 	for row in 1:constraints
+# 		P[row, :] = rand()*rand(Dirichlet(ones(constraints)))
+# 	end
+
+# 	# Sylvester equation has unique solution when P and C have no common eigenvalues
+# 	vals, vecs = eigen(P)
+
+# 	# Could be dangerous infinite loop
+# 	if !isempty(intersect(vals, λ_c))
+# 		println("Eigenvalues intersect, generating new P matrix.")
+# 		return sample_P(λ_c)
+# 	else
+# 		return P
+# 	end
+
+# end
+
+# # Attempt to find a polytopic ROA via the SDP method
+#  function polytope_roa_sylvester(Aₓ, bₓ, C, fp; constraints=100)
+#  	# Put domain constraints in x̄ frame
+# 	Aₓ_ = Aₓ
+# 	bₓ_ = bₓ - Aₓ_*fp
+# 	Aₛ_ = Aₛ
+# 	bₛ_ = bₛ - Aₛ_*fp
+
+# 	# Sample P s.t. P .≥ 0 && P*1 ≤ 1
+# 	λ_c, vecs_c = eigen(C)
+# 	P = sample_P(λ_c, constraints)	
+
+# 	# Solve Sylvester equation PF + F(-C) = 0
+# 	F = sylvc(P, -C, zeros(constraints, size(C,2)))
+
+# 	# Grow/shrink polytope roa to fit within domain polytope
+
+
+# 	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
+#  end
+
+
+
+
+# # Find an i-step invariant set given a fixed point p
+# function i_step_invariance(fixed_point, max_steps)
+# 	for i in 0:max_steps
+# 		println("\n", i+1)
+# 		# load neural network
+# 		copies = i # copies = 0 is original network
+# 		model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
+# 		weights, net_dict = pendulum_net(model, copies)
+# 		state = get_state(fixed_point, weights)
+# 		num_neurons = sum([length(state[layer]) for layer in 1:length(state)])
 		
-		# get Cx+d, Ax≤b
-		C, d = local_map(state, weights)
-		println("opnorm(C'C): ", opnorm(C'C))
-		F = eigen(C)
-		println("eigen(C): ", F.values)
-		A, b, nothing, nothing, unique_nonzerow_indices = get_constraints(weights, state, num_neurons)
-		A, b, nothing, nothing, nothing = remove_redundant(A, b, [], [], unique_nonzerow_indices, [])
+# 		# get Cx+d, Ax≤b
+# 		C, d = local_map(state, weights)
+# 		println("opnorm(C'C): ", opnorm(C'C))
+# 		F = eigen(C)
+# 		println("eigen(C): ", F.values)
+# 		A, b, nothing, nothing, unique_nonzerow_indices = get_constraints(weights, state, num_neurons)
+# 		A, b, nothing, nothing, nothing = remove_redundant(A, b, [], [], unique_nonzerow_indices, [])
 
-		# get forward reachable set
-		Af, bf = affine_map(A, b, C, d)
+# 		# get forward reachable set
+# 		Af, bf = affine_map(A, b, C, d)
 
-		# check if forward reachable set is a strict subset of Ax≤b
-		unique_nonzerow_indices = 1:(length(b) + length(bf)) # all indices unique & nonzero
-		A_, b_, nothing, nothing, nothing = remove_redundant(vcat(A, Af), vcat(b, bf), [], [], unique_nonzerow_indices, [])
-		if A_ == Af && b_ == bf
-			println(i+1, "-step invariant set found!")
-			return i, state, A_, b_
-		end
-	end
-	return nothing, nothing, nothing, nothing
-end
+# 		# check if forward reachable set is a strict subset of Ax≤b
+# 		unique_nonzerow_indices = 1:(length(b) + length(bf)) # all indices unique & nonzero
+# 		A_, b_, nothing, nothing, nothing = remove_redundant(vcat(A, Af), vcat(b, bf), [], [], unique_nonzerow_indices, [])
+# 		if A_ == Af && b_ == bf
+# 			println(i+1, "-step invariant set found!")
+# 			return i, state, A_, b_
+# 		end
+# 	end
+# 	return nothing, nothing, nothing, nothing
+# end
 
 
