@@ -75,7 +75,6 @@ end
 
 
 
-# ARGS = ["vnncomp2021/benchmarks/test/test_nano.onnx", "vnncomp2021/benchmarks/test/test_nano.vnnlib", "Neural-Network-Reach/test/test_nano_output.txt", "200"]
 # Solve on small problem to compile functions
 small_compile()
 
@@ -86,7 +85,7 @@ vnnlib_filename = ARGS[2]
 output_filename = ARGS[3]
 time_limit = parse(Float64, ARGS[4])
 
-prefix = "vnncomp2021/benchmarks/"
+prefix = "./benchmarks/"
 mat_filename = mat_onnx_filename[length(prefix)+1:end]
 vnnlib_filename = vnnlib_filename[length(prefix)+1:end]
 
