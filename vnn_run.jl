@@ -15,7 +15,7 @@ function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
 	try
 		verification_res = "unknown"
 		for i in 1:length(b_in)
-			ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, A_in[i], b_in[i], A_out, b_out, reach=false, back=false, verification=true)
+			ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, A_in[i], b_in[i], A_out, b_out, verification=true)
 			if verification_res == "violated"
 				open(output_filename, "w") do io
 			    write(io, verification_res)
@@ -49,11 +49,9 @@ macro timeout(expr, seconds=-1, cb=(tsk) -> Base.throwto(tsk, InterruptException
     quote
         tsk = @task $expr
         schedule(tsk)
-
         if $seconds > -1
             Timer((timer) -> $cb(tsk), $seconds)
         end
-
         return fetch(tsk)
     end
 end
@@ -62,12 +60,12 @@ end
 
 # Solve on small problem to compile functions
 function small_compile()
-	weights = random_net(3, 2, 10, 5) # (in_d, out_d, hdim, layers)
+	weights = random_net(3, 2, 3, 3) # (in_d, out_d, hdim, layers)
 	Aᵢ = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
 	bᵢ = [5., 5., 5., 5., 8., 8., 8., 8.]
 	Aₒ = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
 	bₒ = [101., -100., 101., -100.]
-	ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=true)
+	ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], verification=true, verbose=false)
 	return nothing
 end
 

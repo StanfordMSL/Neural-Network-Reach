@@ -14,14 +14,6 @@ TIMEOUT=$6
 
 echo "Running benchmark instance in category '$CATEGORY' with onnx file '$ONNX_FILE', vnnlib file '$VNNLIB_FILE', results file $RESULTS_FILE, and timeout $TIMEOUT"
 
-# setup environment variable for tool (doing it earlier won't be persistent with docker)"
-#DIR=$(dirname $(dirname $(realpath $0)))
-#export PYTHONPATH="$PYTHONPATH:$DIR/src"
-
-# run the tool to produce the results file
-#julia --project=. "vnn_run.jl" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"
-
-
 # run the tool to produce the results file
 script_name=$0
 script_path=$(dirname "$0")

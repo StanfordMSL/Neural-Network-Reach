@@ -481,7 +481,7 @@ end
 # Given input point and weights return ap2input, ap2output, ap2map, plt_in, plt_out
 # set reach=false for just cell enumeration
 # Supports looking for multiple backward reachable sets at once
-function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
+function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false, verbose=true)
 	# Construct necessary data structures #
 	ap2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
 	ap2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
@@ -500,7 +500,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	# Begin cell enumeration #
 	i, saved_lps, solved_lps, rank_deficient = (1, 0, 0, 0)
 	while !isempty(working_set)
-		println(i)
+		verbose ? println(i) : nothing
 		ap = pop!(working_set)
 
 		# Get local affine_map
@@ -516,7 +516,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
 					verification_res = "violated"
-					println("Property violated.")
+					verbose ? println("Property violated.") : nothing
 					return ap2input, ap2output, ap2map, ap2backward, verification_res
 				end
 			end
@@ -544,7 +544,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	end
 	if verification
 		verification_res = "holds"
-		println("Property holds.")
+		verbose ? println("Property holds.") : nothing
 	end
 	return ap2input, ap2output, ap2map, ap2backward, verification_res
 end
