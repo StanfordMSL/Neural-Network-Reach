@@ -9,6 +9,7 @@ function get_constraints(vnnlib_filename)
 		Aₒ, bₒ = Matrix{Float64}(undef, 2, 1), Vector{Float64}(undef, 2)
 		Aₒ[1,1] = -1.
 		bₒ[1] = 100.
+		return [Aᵢ], [bᵢ], [Aₒ], [bₒ]
 	elseif vnnlib_filename == "test/test_prop.vnnlib"
 		Aᵢ = Float64.([  -1  0  0  0  0; # ρ
 							   1  0  0  0  0; # ρ

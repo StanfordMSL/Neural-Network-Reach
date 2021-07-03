@@ -1,17 +1,19 @@
 # TO RUN from home directory
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_tiny.onnx" "vnncomp2021/benchmarks/vnncomp2021/benchmarks/test/test_tiny.vnnlib" "Neural-Network-Reach/test/test_tiny_output.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_small.onnx" "vnncomp2021/benchmarks/vnncomp2021/benchmarks/test/test_small.vnnlib" "Neural-Network-Reach/test/test_small_output.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_sat.onnx" "vnncomp2021/benchmarks/vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_sat_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_tiny.onnx" "vnncomp2021/benchmarks/test/test_tiny.vnnlib" "Neural-Network-Reach/test/test_tiny_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_small.onnx" "vnncomp2021/benchmarks/test/test_small.vnnlib" "Neural-Network-Reach/test/test_small_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_sat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_sat_output.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_unsat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_unsat_output.txt" 10
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/acasxu/ACASXU_run2a_5_7_batch_2000.onnx" "vnncomp2021/benchmarks/acasxu/prop_3.vnnlib" "Neural-Network-Reach/acasxu/prop_3_output.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x2.onnx" "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x6.onnx" "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 20
+using FileIO
 
 include("reach.jl")
 include("load_vnn.jl")
 
 
 function solve_problem(weights, A_in, b_in, A_out, b_out, output_filename)
+	println("Functions compiled, running problem...")
 	try
 		verification_res = "unknown"
 		for i in 1:length(b_in)
@@ -57,10 +59,9 @@ macro timeout(expr, seconds=-1, cb=(tsk) -> Base.throwto(tsk, InterruptException
 end
 
 
-
 # Solve on small problem to compile functions
 function small_compile()
-	weights = random_net(3, 2, 3, 3) # (in_d, out_d, hdim, layers)
+	weights = load("Neural-Network-Reach/small_weights.jld2")["small_weights"]
 	Aᵢ = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
 	bᵢ = [5., 5., 5., 5., 8., 8., 8., 8.]
 	Aₒ = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
@@ -69,6 +70,11 @@ function small_compile()
 	return nothing
 end
 
+
+
+
+
+ARGS = ["vnncomp2021/benchmarks/mnistfc/mnist-net_256x2.onnx", "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib", "Neural-Network-Reach/mnistfc/prop_0_0.03.txt", "200"]
 # Solve on small problem to compile functions
 small_compile()
 
