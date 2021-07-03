@@ -2,11 +2,19 @@ include("vnn_parser.jl")
 
 # From vnnlib_filename specify or parse constraints
 function get_constraints(vnnlib_filename)
-	if vnnlib_filename == "test/test_tiny.vnnlib" || vnnlib_filename == "test/test_small.vnnlib"
+	if vnnlib_filename == "test/test_nano.vnnlib" 
+		Aᵢ, bᵢ = Matrix{Float64}(undef, 2, 1), Vector{Float64}(undef, 2)
+		Aᵢ[1,1] = -1.; Aᵢ[2,1] = 1.
+		bᵢ[1] = 1.; bᵢ[2] = 1.
+		Aₒ, bₒ = Matrix{Float64}(undef, 2, 1), Vector{Float64}(undef, 2)
+		Aₒ[1,1] = 1.
+		bₒ[1] = -1.
+		return [Aᵢ], [bᵢ], [Aₒ], [bₒ]
+	elseif vnnlib_filename == "test/test_tiny.vnnlib" || vnnlib_filename == "test/test_small.vnnlib"
 		Aᵢ, bᵢ = Matrix{Float64}(undef, 2, 1), Vector{Float64}(undef, 2)
 		Aᵢ[1,1] = -1.; Aᵢ[2,1] = 1.
 		bᵢ[1] = 1.; bᵢ[2] = 1. 
-		Aₒ, bₒ = Matrix{Float64}(undef, 2, 1), Vector{Float64}(undef, 2)
+		Aₒ, bₒ = Matrix{Float64}(undef, 1, 1), Vector{Float64}(undef, 1)
 		Aₒ[1,1] = -1.
 		bₒ[1] = 100.
 		return [Aᵢ], [bᵢ], [Aₒ], [bₒ]

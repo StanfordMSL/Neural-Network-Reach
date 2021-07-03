@@ -1,4 +1,5 @@
 # TO RUN from home directory
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_nano.onnx" "vnncomp2021/benchmarks/test/test_nano.vnnlib" "Neural-Network-Reach/test/test_nano_output.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_tiny.onnx" "vnncomp2021/benchmarks/test/test_tiny.vnnlib" "Neural-Network-Reach/test/test_tiny_output.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_small.onnx" "vnncomp2021/benchmarks/test/test_small.vnnlib" "Neural-Network-Reach/test/test_small_output.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_sat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_sat_output.txt" 200
@@ -74,7 +75,7 @@ end
 
 
 
-ARGS = ["vnncomp2021/benchmarks/mnistfc/mnist-net_256x2.onnx", "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib", "Neural-Network-Reach/mnistfc/prop_0_0.03.txt", "200"]
+# ARGS = ["vnncomp2021/benchmarks/test/test_nano.onnx", "vnncomp2021/benchmarks/test/test_nano.vnnlib", "Neural-Network-Reach/test/test_nano_output.txt", "200"]
 # Solve on small problem to compile functions
 small_compile()
 
@@ -90,7 +91,9 @@ mat_filename = mat_onnx_filename[length(prefix)+1:end]
 vnnlib_filename = vnnlib_filename[length(prefix)+1:end]
 
 # Get network weights
-if mat_filename == "test/test_tiny.mat" 
+if mat_filename == "test/test_nano.mat" 
+	weights = load_test_nano()
+elseif mat_filename == "test/test_tiny.mat" 
 	weights = load_test_tiny()
 elseif mat_filename == "test/test_small.mat"
 	weights = load_test_small()

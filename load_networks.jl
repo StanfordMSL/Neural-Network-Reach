@@ -59,74 +59,36 @@ function nnet_load(filename)
 end
 
 
-# Load ACAS Networks #
-function acas_net_nnet(a::Int64, b::Int64)
-	filename = string("models/ACAS_nnet/ACASXU_experimental_v2a_", a, "_", b, ".nnet")
-	return nnet_load(filename)
-end
-
-
-# Load Pendulum Networks #
-function pendulum_net(filename::String, copies::Int64)
-
-	model = matread(filename)
-	num_layers = length(model["weights"])
-	layer_sizes = vcat(size(model["weights"][1], 2), [length(model["biases"][i]) for i in 1:num_layers])
-
-	# make net_dict
-	σᵢ = Float64.(Diagonal(vec(model["X_std"])))
-	μᵢ = Float64.(vec(model["X_mean"]))
-	σₒ = Float64.(Diagonal(vec(model["Y_std"])))
-	μₒ = Float64.(vec(model["Y_mean"]))
-	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
-	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
-
-	net_dict = Dict()
-	net_dict["num_layers"] = num_layers
-	net_dict["layer_sizes"] = layer_sizes
-	net_dict["input_size"] = layer_sizes[1]
-	net_dict["output_size"] = layer_sizes[end]
-	net_dict["input_norm_map"] = (Aᵢₙ, bᵢₙ)
-	net_dict["output_unnorm_map"] = (Aₒᵤₜ, bₒᵤₜ) 
-
-
-	w = Vector{Array{Float64,2}}(undef, num_layers)
-	for i in 1:(num_layers-1)
-		w[i] = vcat(hcat(model["weights"][i], vec(model["biases"][i])), reshape(zeros(1+layer_sizes[i]),1,:))
-		w[i][end,end] = 1
-	end
-	w[end] = hcat(model["weights"][end], vec(model["biases"][end]))
-	
-	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
-	merged_layers = [c*num_layers - (c-1) for c in 1:copies]
-	w_idx = 1
-	for k in 1:length(weights)
-		if k == 1
-			weights[k] = w[1]
-			w_idx += 1
-		elseif k == length(weights)
-			weights[k] = w[end]
-		elseif k in merged_layers
-			w̄ₒ = vcat(w[end], reshape(zeros(1+layer_sizes[end-1]),1,:))
-			w̄ₒ[end,end] = 1
-			Āₒ = vcat(hcat(Aₒᵤₜ, bₒᵤₜ), reshape(zeros(1+layer_sizes[end]),1,:))
-			Āₒ[end,end] = 1
-			Āᵢ = vcat(hcat(Aᵢₙ, bᵢₙ), reshape(zeros(1+layer_sizes[1]),1,:))
-			Āᵢ[end,end] = 1
-			
-			weights[k] = w[1]*Āᵢ*Āₒ*w̄ₒ
-			w_idx = 2
-		else
-			weights[k] = w[w_idx]
-			w_idx += 1
-		end
-	end
-
-	return weights, net_dict
-end
-
-
 # Load networks given as .mat files that were obtained from extract_onnx_params.py
+function load_test_nano()
+	W0 = [0.5]
+	B0 = [0.0]
+	W1 = [1.0]
+	B1 = [0.0]
+
+	# Construct augmented weights. 
+	weights = Vector{Array{Float64,2}}(undef, 2)
+	weights[1] = [0.5 0.0; 0.0 1.0]
+	weights[2] = [1.0 0.0]
+
+	return weights
+end
+
+function load_test_tiny()
+	W0 = [1.0]
+	B0 = [0.0]
+	W1 = [1.0]
+	B1 = [0.0]
+
+	# Construct augmented weights. 
+	weights = Vector{Array{Float64,2}}(undef, 2)
+	weights[1] = [1.0 0.0; 0.0 1.0]
+	weights[2] = [1.0 0.0]
+
+	return weights
+end
+
+
 function load_test_small()
 	B0 = [1.5; 1.5]
 	W2 = [3.0 3.0]
@@ -151,19 +113,7 @@ function load_test_small()
 end
 
 
-function load_test_tiny()
-	W0 = [1.0]
-	B0 = [0.0]
-	W1 = [1.0]
-	B1 = [0.0]
 
-	# Construct augmented weights. 
-	weights = Vector{Array{Float64,2}}(undef, 2)
-	weights[1] = [1.0 0.0; 0.0 1.0]
-	weights[2] = [1.0 0.0]
-
-	return weights
-end
 
 
 # Load networks given as .mat files that were obtained from extract_onnx_params.py
