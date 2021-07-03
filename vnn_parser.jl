@@ -2,7 +2,7 @@
 using LinearAlgebra
 
 function parse_vnn(filename)
-    strarr = readlines(string("Neural-Network-Reach/", filename))
+    strarr = readlines(string("/home/ubuntu/work/Neural-Network-Reach/", filename))
 
     x_var = r"declare-const X"
     y_var = r"declare-const Y"
