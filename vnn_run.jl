@@ -1,12 +1,12 @@
 # TO RUN from home directory
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_nano.onnx" "vnncomp2021/benchmarks/test/test_nano.vnnlib" "Neural-Network-Reach/test/test_nano_output.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_tiny.onnx" "vnncomp2021/benchmarks/test/test_tiny.vnnlib" "Neural-Network-Reach/test/test_tiny_output.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_small.onnx" "vnncomp2021/benchmarks/test/test_small.vnnlib" "Neural-Network-Reach/test/test_small_output.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_sat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_sat_output.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/test/test_unsat.onnx" "vnncomp2021/benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_unsat_output.txt" 10
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/acasxu/ACASXU_run2a_5_7_batch_2000.onnx" "vnncomp2021/benchmarks/acasxu/prop_3.vnnlib" "Neural-Network-Reach/acasxu/prop_3_output.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x2.onnx" "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 200
-# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "vnncomp2021/benchmarks/mnistfc/mnist-net_256x6.onnx" "vnncomp2021/benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 20
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/test/test_nano.onnx" "./benchmarks/test/test_nano.vnnlib" "Neural-Network-Reach/test/test_nano_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/test/test_tiny.onnx" "./benchmarks/test/test_tiny.vnnlib" "Neural-Network-Reach/test/test_tiny_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/test/test_small.onnx" "./benchmarks/test/test_small.vnnlib" "Neural-Network-Reach/test/test_small_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/test/test_sat.onnx" "./benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_sat_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/test/test_unsat.onnx" "./benchmarks/test/test_prop.vnnlib" "Neural-Network-Reach/test/test_unsat_output.txt" 10
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/acasxu/ACASXU_run2a_5_7_batch_2000.onnx" "./benchmarks/acasxu/prop_3.vnnlib" "Neural-Network-Reach/acasxu/prop_3_output.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/mnistfc/mnist-net_256x2.onnx" "./benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 200
+# $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/mnistfc/mnist-net_256x6.onnx" "./benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 20
 using FileIO
 
 include("reach.jl")
