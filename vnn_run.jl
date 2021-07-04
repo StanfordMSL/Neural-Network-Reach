@@ -99,8 +99,12 @@ elseif mat_filename[end-18:end] == "test/test_small.mat"
 	weights = load_test_small()
 	vnnlib_filename = vnnlib_filename[end-21:end]
 
-elseif mat_filename[end-16:end] == "test/test_sat.mat" || mat_filename[end-18:end] == "test/test_unsat.mat"
-	weights = load_mat_onnx_test_acas(mat_filename)
+elseif mat_filename[end-16:end] == "test/test_sat.mat" 
+	weights = load_mat_onnx_test_acas("test/test_sat.mat")
+	vnnlib_filename = vnnlib_filename[end-20:end]
+
+elseif mat_filename[end-18:end] == "test/test_unsat.mat"
+	weights = load_mat_onnx_test_acas("test/test_unsat.mat")
 	vnnlib_filename = vnnlib_filename[end-20:end]
 
 elseif mat_filename[end-37:end-32] == "acasxu"
