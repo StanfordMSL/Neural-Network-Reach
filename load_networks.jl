@@ -119,7 +119,7 @@ end
 # Load networks given as .mat files that were obtained from extract_onnx_params.py
 function load_mat_onnx_test_acas(filename)
 	# vars = matread(string("/home/ubuntu/work/Neural-Network-Reach/", filename))
-	vars = matread(string("/home/joe/Neural-Network-Reach/", filename))
+	vars = matread(string("/Neural-Network-Reach/", filename))
 	weight = r"MatMul_W"
 	bias = r"Add_B"
 
@@ -150,7 +150,7 @@ end
 # Load networks given as .mat files that were obtained from extract_onnx_params.py
 function load_mat_onnx_acas(filename)
 	# vars = matread(string("/home/ubuntu/work/Neural-Network-Reach/", filename))
-	vars = matread(string("/home/joe/Neural-Network-Reach/", filename))
+	vars = matread(string("/Neural-Network-Reach/", filename))
 	weight = r"MatMul_W"
 	bias = r"Add_B"
 
@@ -180,7 +180,7 @@ end
 
 function load_mat_onnx_mnist(filename)
 	# vars = matread(string("/home/ubuntu/work/Neural-Network-Reach/", filename))
-	vars = matread(string("/home/joe/Neural-Network-Reach/", filename))
+	vars = matread(string("/Neural-Network-Reach/", filename))
 	weight = r"weight"
 	bias = r"bias"
 
