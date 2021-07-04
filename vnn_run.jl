@@ -7,7 +7,7 @@
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/acasxu/ACASXU_run2a_5_7_batch_2000.onnx" "./benchmarks/acasxu/prop_3.vnnlib" "Neural-Network-Reach/acasxu/prop_3_output.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/mnistfc/mnist-net_256x2.onnx" "./benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 200
 # $ julia --project="Neural-Network-Reach/" Neural-Network-Reach/vnn_run.jl "./benchmarks/mnistfc/mnist-net_256x6.onnx" "./benchmarks/mnistfc/prop_0_0.03.vnnlib" "Neural-Network-Reach/mnistfc/prop_0_0.03.txt" 20
-using FileIO
+using MAT
 
 include("reach.jl")
 include("load_vnn.jl")
@@ -62,7 +62,7 @@ end
 
 # Solve on small problem to compile functions
 function small_compile()
-	weights = load("/home/ubuntu/work/Neural-Network-Reach/small_weights.jld2")["small_weights"]
+	weights = matread("/home/ubuntu/work/Neural-Network-Reach/small_weights.mat")["small_weights"]
 	Aᵢ = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
 	bᵢ = [5., 5., 5., 5., 8., 8., 8., 8.]
 	Aₒ = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
