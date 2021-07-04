@@ -11,8 +11,8 @@ sudo cp -r julia-1.4.1 /opt/
 sudo ln -s /opt/julia-1.4.1/bin/julia /usr/local/bin/julia
 sudo apt-get install build-essential -y
 sudo apt-get install git -y
-#sudo apt-get install python3 -y
-#sudo apt-get install python3-pip -y
+sudo apt-get install python3 -y
+sudo apt-get install python3-pip -y
 sudo apt-get install psmisc
 source ~/.bashrc
 
