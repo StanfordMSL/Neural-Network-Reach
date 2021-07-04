@@ -62,7 +62,7 @@ end
 
 # Solve on small problem to compile functions
 function small_compile()
-	weights = load("Neural-Network-Reach/small_weights.jld2")["small_weights"]
+	weights = load("/home/ubuntu/work/Neural-Network-Reach/small_weights.jld2")["small_weights"]
 	Aᵢ = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
 	bᵢ = [5., 5., 5., 5., 8., 8., 8., 8.]
 	Aₒ = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
@@ -70,7 +70,6 @@ function small_compile()
 	ap2input, ap2output, ap2map, ap2backward, verification_res = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], verification=true, verbose=false)
 	return nothing
 end
-
 
 
 
@@ -85,23 +84,40 @@ vnnlib_filename = ARGS[2]
 output_filename = ARGS[3]
 time_limit = parse(Float64, ARGS[4])
 
-prefix = "./benchmarks/"
-mat_filename = mat_onnx_filename[length(prefix)+1:end]
-vnnlib_filename = vnnlib_filename[length(prefix)+1:end]
 
 # Get network weights
-if mat_filename == "test/test_nano.mat" 
+if mat_filename[end-17:end] == "test/test_nano.mat"
 	weights = load_test_nano()
-elseif mat_filename == "test/test_tiny.mat" 
+	vnnlib_filename = vnnlib_filename[end-20:end]
+
+elseif mat_filename[end-17:end] == "test/test_tiny.mat" 
 	weights = load_test_tiny()
-elseif mat_filename == "test/test_small.mat"
+	vnnlib_filename = vnnlib_filename[end-20:end]
+
+elseif mat_filename[end-18:end] == "test/test_small.mat"
 	weights = load_test_small()
-elseif mat_filename == "test/test_sat.mat" || mat_filename == "test/test_unsat.mat"
+	vnnlib_filename = vnnlib_filename[end-21:end]
+
+elseif mat_filename[end-16:end] == "test/test_sat.mat" || mat_filename[end-18:end] == "test/test_unsat.mat"
 	weights = load_mat_onnx_test_acas(mat_filename)
-elseif mat_filename[1:6] == "acasxu"
-	weights = load_mat_onnx_acas(mat_filename)
-elseif mat_filename[1:7] == "mnistfc"
-	weights = load_mat_onnx_mnist(mat_filename)
+	vnnlib_filename = vnnlib_filename[end-20:end]
+
+elseif mat_filename[end-37:end-32] == "acasxu"
+	weights = load_mat_onnx_acas(mat_filename[end-37:end])
+	if vnnlib_filename[end-19:end-14] == "acasxu"
+		vnnlib_filename = vnnlib_filename[end-19:end]
+	elseif vnnlib_filename[end-20:end-15] == "acasxu"
+		vnnlib_filename = vnnlib_filename[end-20:end]
+	end
+
+elseif mat_filename[end-26:end-20] == "mnistfc"
+	weights = load_mat_onnx_mnist(mat_filename[end-26:end])
+	if vnnlib_filename[end-25:end-19] == "mnistfc"
+		vnnlib_filename = vnnlib_filename[end-25:end]
+	elseif vnnlib_filename[end-26:end-20] == "mnistfc"
+		vnnlib_filename = vnnlib_filename[end-26:end]
+	end
+
 else
 	# skip benchmark
 	println("Got unexpected ONNX filename!")
