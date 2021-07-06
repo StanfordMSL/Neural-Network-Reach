@@ -62,7 +62,7 @@ end
 
 # Solve on small problem to compile functions
 function small_compile()
-	weights = matread("/home/ubuntu/work/Neural-Network-Reach/small_weights.mat")["small_weights"] # for vnn_comp evaluation
+	weights = Vector{Matrix{Float64}}(matread("/home/ubuntu/work/Neural-Network-Reach/small_weights.mat")["small_weights"]) # for vnn_comp evaluation
 	# weights = Vector{Matrix{Float64}}(matread("/Neural-Network-Reach/small_weights.mat")["small_weights"]) # for testing locally
 	Aᵢ = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
 	bᵢ = [5., 5., 5., 5., 8., 8., 8., 8.]
