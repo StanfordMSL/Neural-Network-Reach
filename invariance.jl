@@ -54,6 +54,7 @@ function find_fixed_points(state2map, state2input, weights, net_dict)
 			if in_polytope(fp, Ā, b̄) && (eval_net(fp, weights, net_dict, 1) ≈ fp) # second condition is sanity check
 				push!(fixed_points, fp)
 				fp_dict[fp] = [(Ā, b̄), (C̄, d̄)]
+				println("Found fixed point.")
 			end
 		else
 			error("Non-unique fixed point! Make more general")
@@ -292,16 +293,39 @@ end
 	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
  end
 
+# Given fixed points and fp_dict find one that is a local attractor
+function find_attractor(fixed_points, fp_dict)
+	for (i, fp) in enumerate(fixed_points)
+		region = fp_dict[fp]
+		Aₓ, bₓ = region[1]
+		C, d = region[2]
+		if all(norm.(eigen(C).values) .< 1)
+			println("Verified fixed point is a local attractor.")
+			break
+		elseif i == length(fixed_points)
+			error("Unstable local system")
+		end
+	end
+	return fp, C, d, Aₓ, bₓ
+end
+
 
 
 # Given a NN model, number of seed polytope ROA constraints, and number of backward reachability steps, compute ROA
-function find_roa(model, num_constraints, num_steps)
-	weights, net_dict = pendulum_net(model, 1)
+function find_roa(dynamics::String, num_constraints, num_steps)
+	if dynamics == "pendulum"
+		weights, net_dict = pendulum_net("models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat", 1)
+		Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
+		Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
+		println("Input set: pendulum")
+	elseif dynamics == "vanderpol"
+		weights, net_dict = vanderpol_net(1)
+		Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
+		Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
+		println("Input set: van der Pol box")
+	end
 
-	Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
-	Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
-	println("Input set: pendulum")
-
+	
 	# Run algorithm on one-step dynamics
 	@time begin
 	state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
@@ -309,22 +333,30 @@ function find_roa(model, num_constraints, num_steps)
 	println("Dynamics function has ", length(state2input), " affine regions.") 
 
 	# Find fixed point(s) #
-	fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict) # Fixed point =  [-0.028117297151424497, 0.09680434353994193]
-	fp = fixed_points[1]
-	region = fp_dict[fp]
-	Aₓ, bₓ = region[1]
-	C, d = region[2]
+	fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict)
+	fp, C, d, Aₓ, bₓ = find_attractor(fixed_points, fp_dict)
+
 
 	# Find Polytopic ROA via SDP method # 
 	A_roa, b_roa = polytope_roa_sdp(Aₓ, bₓ, C, fp, num_constraints)
 
 	# Perform backward reachability on the seed invariant set
-	weights_chain, net_dict_chain = pendulum_net(model, num_steps)
+	if dynamics == "pendulum"
+		weights_chain, net_dict_chain = pendulum_net(model, num_steps)
+	elseif dynamics == "vanderpol"
+		weights_chain, net_dict_chain = vanderpol_net(num_steps)
+	end
 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
 	Aₒ_chain, bₒ_chain = A_roa*Aₒᵤₜ, b_roa - A_roa*bₒᵤₜ
 	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], reach=false, back=true, verification=false)
-	plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
-	plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
+	
+	if dynamics == "pendulum"
+		plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
+		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
+	elseif dynamics == "vanderpol"
+		plt_in2  = plot_hrep_vanderpol(state2backward_chain[1], net_dict_chain, space="input")
+		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-3, 3), ylims=(-3, 3))
+	end
 
 	return A_roa, b_roa, state2backward_chain[1], net_dict_chain, plt_in2
 end

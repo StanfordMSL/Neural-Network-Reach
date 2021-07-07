@@ -1,21 +1,18 @@
-using Plots, MATLAB
+using Plots
 include("reach.jl")
 include("invariance.jl")
 
 # Returns H-rep of various input sets
-function input_constraints_pendulum(weights, type::String, net_dict)
+function input_constraints_vanderpol(weights, type::String, net_dict)
 	# Each input specification is in the form Ax≤b
 	# The network takes normalized inputs: xₙ = Aᵢₙx + bᵢₙ
 	# Thus the input constraints for raw network inputs are: A*inv(Aᵢₙ)x ≤ b + A*inv(Aᵢₙ)*bᵢₙ
-	if type == "pendulum"
-		A = [1 0; -1 0; 0 1; 0 -1]
-		b = deg2rad.([90, 90, 90, 90])
-	elseif type == "box"
+	if type == "box"
 		in_dim = size(weights[1],2) - 1
 		A_pos = Matrix{Float64}(I, in_dim, in_dim)
 		A_neg = Matrix{Float64}(-I, in_dim, in_dim)
 		A = vcat(A_pos, A_neg)
-		b = 0.01*ones(2*in_dim)
+		b = 3.0*ones(2*in_dim)
 	elseif type == "hexagon"
 		A = [1 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
 		b = [5, 5, 5, 5, 8, 8, 8, 8]
@@ -28,13 +25,13 @@ function input_constraints_pendulum(weights, type::String, net_dict)
 end
 
 # Returns H-rep of various output sets
-function output_constraints_pendulum(weights, type::String, net_dict)
+function output_constraints_vanderpol(weights, type::String, net_dict)
 	# Each output specification is in the form Ayₒᵤₜ≤b
 	# The raw network outputs are unnormalized: yₒᵤₜ = Aₒᵤₜy + bₒᵤₜ
 	# Thus the output constraints for raw network outputs are: A*Aₒᵤₜ*y ≤ b - A*bₒᵤₜ
 	if type == "origin"
-		A = [1 0; -1 0; 0 1; 0 -1]
-		b = deg2rad.([5, 5, 2, 2])
+		A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
+		b = [1., 1., 1., 1.]
  	else 
  		error("Invalid input constraint specification.")
  	end
@@ -44,8 +41,8 @@ end
 
 
 # Plot all polytopes
-function plot_hrep_pendulum(state2constraints, net_dict; space = "input", type="normal")
-	plt = plot(reuse = false, legend=false, xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
+function plot_hrep_vanderpol(state2constraints, net_dict; space = "input", type="normal")
+	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
 	for state in keys(state2constraints)
 		A, b = state2constraints[state]
 		if space == "input"	
@@ -64,7 +61,6 @@ function plot_hrep_pendulum(state2constraints, net_dict; space = "input", type="
 			error("Invalid arg given for space")
 		end
 		
-		reg = (180/π)*reg # Convert from rad to deg for plotting
 		if isempty(reg)
 			@show reg
 			error("Empty polyhedron.")
@@ -73,7 +69,7 @@ function plot_hrep_pendulum(state2constraints, net_dict; space = "input", type="
 		if type == "normal"
 			plot!(plt,  reg, fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 		elseif type == "gif"
-			plot!(plt,  reg, xlims=(-90, 90), ylims=(-90, 90), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+			plot!(plt,  reg, xlims=(-3, 3), ylims=(-3, 3), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 		end
 	end
 	return plt
@@ -82,11 +78,9 @@ end
 
 # make gif of backwards reachable set over time
 function BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, steps)
-	model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
-	plt = plot((180/π)*HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-90, 90), ylims=(-90, 90))
-	# Way 1
+	plt = plot(HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-3, 3), ylims=(-3, 3))
 	anim = @animate for Step in 2:steps
-		weights, net_dict = pendulum_net(model, Step)
+		weights, net_dict = vanderpol_net(Step)
 		Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
 		Aₒ, bₒ = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
 		state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=true, verification=false)
@@ -105,8 +99,31 @@ end
 # ⋅ compute invariant polytopes around the fixed points
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
+# copies = 1 # copies = 1 is original network
+
+# weights, net_dict = vanderpol_net(copies)
+
+# Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
+# Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
+
+# # Run algorithm
+# @time begin
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
+# end
+# @show length(state2input)
+
+# # Plot all regions #
+# plt_in1  = plot_hrep_vanderpol(state2input, net_dict, space="input")
+
+
+# fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict)
+# fp = fixed_points[1]
+# @show fp
+# @show eval_net(fp, weights, net_dict, copies)
+
+
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, state2backward_chain[1], net_dict_chain, plt_in2 = find_roa("pendulum", 70, 20)
+A_roa, b_roa, state2backward_chain[1], net_dict_chain, plt_in2 = find_roa("vanderpol", 70, 5)
 
 # Create gif of backward reachable set
 # BRS_gif(model, Aᵢ, bᵢ, A_roa, b_roa, 5)

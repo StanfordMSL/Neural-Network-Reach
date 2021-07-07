@@ -76,7 +76,7 @@ def train(dataloader, model, loss_fn, optimizer):
         loss.backward()
         optimizer.step()
 
-        if batch % 100 == 0:
+        if batch % 1 == 0:
             loss, current = loss.item(), batch * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
@@ -85,16 +85,19 @@ def test(dataloader, model, loss_fn):
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
     model.eval()
-    test_loss, correct = 0, 0
+    test_loss = 0.
     with torch.no_grad():
         for X, y in dataloader:
             X, y = X.to(device), y.to(device)
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
-            correct += (pred.argmax(1) == y).type(torch.float).sum().item()
     test_loss /= num_batches
-    correct /= size
-    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    print(f"Test Error: Avg loss: {test_loss:>8f} \n")
+
+
+
+
+
 
 
 
@@ -104,51 +107,37 @@ def test(dataloader, model, loss_fn):
 if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
 
-params = {}
+# import data, normalize, split, and construct dataset classes
+X = numpy.load("models/vanderpol/X.npy")
+Y = numpy.load("models/vanderpol/Y.npy")
 
-# import data, split, and construct dataset classes
-dataset = "vanderPol"
-X = np.load(dataset + "/data/X.npy")
-Y = np.load(dataset + "/data/Y.npy")
-
-# normalize data to be zero mean and unit std_dev
-X_mean, X_std = torch.mean(X, dim=-2), torch.std(X, dim=-2)
-Y_mean, Y_std = torch.mean(Y, dim=-2), torch.std(Y, dim=-2)
-params["X_mean"], params["X_std"] = X_mean, X_std
-params["Y_mean"], params["Y_std"] = Y_mean, Y_std
-
+X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
+Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
 X = (X - X_mean) / X_std
 Y = (Y - Y_mean) / Y_std
 
 in_dim, out_dim, N = X.shape[1], Y.shape[1], X.shape[0]
-print("Nonlinear regression for input dim = " + in_dim + ", output dim = " + out_dim + ", with " + N + " samples.")
-
 split = int(0.90 * N)
 training_data = Dataset(X[:split, :], Y[:split, :])
 testing_data = Dataset( X[split:, :], Y[split:, :])
 
-
-# Create data loaders.
-batch_size = 64
-train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
-test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
-
-for x, y in test_dataloader:
-    print("\nShape of X_test: ", x.shape)
-    print("Shape of Y_test: ", y.shape, y.dtype)
-    break
-
-
+print("Nonlinear regression for input dim = " + str(in_dim) + ", output dim = " + str(out_dim) + ", with " + str(split) + " samples.")
 print("Using {} device".format(device))
 
-model = FFReLUNet([28*28, 20, 20, 10]).to(device)
 
-print(model)
+# Create data loaders.
+batch_size = 20
+train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
+test_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
+layer_sizes = numpy.array([in_dim, 20, 20, out_dim])
+model = FFReLUNet(layer_sizes).to(device)
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
+print("\n", model)
 
-epochs = 1
+# Train
+epochs = 10
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
@@ -159,14 +148,17 @@ print("Done!")
 # Export weights
 weights = []
 for name, param in model.named_parameters():
-    print('name: ', name)
-    print(type(param))
-    print('param.shape: ', param.shape)
+    # print('name: ', name)
+    # print(type(param))
+    # print('param.shape: ', param.shape)
     weights.append(param.detach().numpy())
-    print('=====')
+    # print('=====')
 
-# save normalization parameters too
-np.savez(dataset + "/savedvars", *weights)
+# save weights and normalization parameters
+numpy.savez("models/vanderpol/weights.npz", *weights)
+numpy.savez("models/vanderpol/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+
+
 
 
 
