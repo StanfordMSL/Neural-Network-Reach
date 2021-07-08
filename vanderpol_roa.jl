@@ -13,6 +13,7 @@ function input_constraints_vanderpol(weights, type::String, net_dict)
 		A_neg = Matrix{Float64}(-I, in_dim, in_dim)
 		A = vcat(A_pos, A_neg)
 		b = 3.0*ones(2*in_dim)
+		b = vcat(2.5*ones(in_dim), 3.0*ones(in_dim))
 	elseif type == "hexagon"
 		A = [1 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
 		b = [5, 5, 5, 5, 8, 8, 8, 8]
@@ -100,8 +101,8 @@ end
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
 # copies = 1 # copies = 1 is original network
-
 # weights, net_dict = vanderpol_net(copies)
+
 
 # Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
 # Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
@@ -119,12 +120,11 @@ end
 # fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict)
 # fp = fixed_points[1]
 # @show fp
-# @show eval_net(fp, weights, net_dict, copies)
 
 
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, state2backward_chain[1], net_dict_chain, plt_in2 = find_roa("vanderpol", 70, 5)
-
+A_roa, b_roa, state2backward_chain, net_dict_chain, plt_in2 = find_roa("vanderpol", 20, 10)
+# 10 steps is ~35k polytopes
 # Create gif of backward reachable set
 # BRS_gif(model, Aᵢ, bᵢ, A_roa, b_roa, 5)
 

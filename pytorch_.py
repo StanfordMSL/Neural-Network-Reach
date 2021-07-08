@@ -58,7 +58,6 @@ class FFReLUNet(nn.Module):
         Returns:
             torch.Tensor: Output of network. [batch, self.shape[-1]]
         """
-        x = self.flatten(x)
         return self.seq(x)
 
 
@@ -76,7 +75,7 @@ def train(dataloader, model, loss_fn, optimizer):
         loss.backward()
         optimizer.step()
 
-        if batch % 1 == 0:
+        if batch % 1000 == 0:
             loss, current = loss.item(), batch * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
@@ -137,7 +136,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
 print("\n", model)
 
 # Train
-epochs = 10
+epochs = 3
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
@@ -158,8 +157,21 @@ for name, param in model.named_parameters():
 numpy.savez("models/vanderpol/weights.npz", *weights)
 numpy.savez("models/vanderpol/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
+model.eval()
+inpt = [0.5, 0.3]
+inpt_norm = torch.tensor(([inpt] - X_mean) / X_std, dtype=torch.float32).to(device)
+outpt_norm = model.forward(inpt_norm)
+outpt = (Y_std * outpt_norm.detach().numpy()) + Y_mean
 
+print("\nX_mean: ", X_mean)
+print("X_std: ", X_std)
+print("Y_mean: ", Y_mean)
+print("Y_std: ", Y_std)
 
+print("Validation Input: ", inpt)
+print("Normalized Input: ", inpt_norm)
+print("Normalized Output: ",outpt_norm)
+print("Unnormalized Output: ", outpt)
 
 
 

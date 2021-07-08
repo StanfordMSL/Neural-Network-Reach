@@ -3,7 +3,7 @@ include("nnet.jl")
 
 
 # Evaluate network. Takes care of normalizing inputs and un-normalizing outputs
-function eval_net(input, weights, net_dict, copies::Int64)
+function eval_net(input, weights, net_dict, copies::Int64; type="normal")
 	copies == 0 ? (return input) : nothing
 	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
@@ -12,6 +12,7 @@ function eval_net(input, weights, net_dict, copies::Int64)
         NN_out = max.(0, weights[layer]*NN_out)
     end
     output = Aₒᵤₜ*weights[end]*NN_out + bₒᵤₜ
+    type == "residual" ? output += input : nothing
     return eval_net(output, weights, net_dict, copies-1)
 end
 

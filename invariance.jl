@@ -10,12 +10,11 @@ end
 
 # Return trajectory of discrete time system where each column is the state at step i
 # Julia arrays are stored in column-major order so it's faster to do matrix[:,i] = data rather than matrix[i,:] = data
-function compute_traj(init, steps::Int64, weights, net_dict; dt=0.1)
-	t = collect(0:dt:dt*steps)
-	state_traj = Matrix{Float64}(undef, net_dict["input_size"], length(t))
+function compute_traj(init, steps::Int64, weights, net_dict; type="normal")
+	state_traj = Matrix{Float64}(undef, net_dict["input_size"], steps+1)
 	state_traj[:,1] = init
-	for i in 2:length(t)
-		state_traj[:,i] = eval_net(state_traj[:,i-1], weights, net_dict, 1)
+	for i in 1:steps
+		state_traj[:,i+1] = eval_net(state_traj[:,i], weights, net_dict, 1, type=type)
 	end
 	return state_traj
 end
@@ -247,6 +246,7 @@ function invariant_polytope(Aₓ, bₓ, Aₒ, bₒ, C)
 
 	# Verify that found polytope is invariant
 	if is_invariant(F_res, C)
+		println("Found invariant polytope!.")
 		return F_res, ones(size(F_res,1))
 	else
 		println("Polytope not invariant.")
@@ -301,7 +301,7 @@ function find_attractor(fixed_points, fp_dict)
 		C, d = region[2]
 		if all(norm.(eigen(C).values) .< 1)
 			println("Verified fixed point is a local attractor.")
-			break
+			return fp, C, d, Aₓ, bₓ
 		elseif i == length(fixed_points)
 			error("Unstable local system")
 		end
