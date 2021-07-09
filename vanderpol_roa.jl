@@ -67,7 +67,7 @@ function plot_hrep_vanderpol(state2constraints, net_dict; space = "input", type=
 		end
 
 		if type == "normal"
-			plot!(plt,  reg, fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+			plot!(plt,  reg, xlims=(-2.5, 2.5), ylims=(-3, 3), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 		elseif type == "gif"
 			plot!(plt,  reg, xlims=(-3, 3), ylims=(-3, 3), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 		end
@@ -99,21 +99,23 @@ end
 # ⋅ compute invariant polytopes around the fixed points
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
-# copies = 1 # copies = 1 is original network
-# weights, net_dict = vanderpol_net(copies)
+copies = 21 # copies = 1 is original network
+weights, net_dict = vanderpol_net(copies)
 
 
-# Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
+Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
 # Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
 
-# # Run algorithm
-# @time begin
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, compact=true)
-# end
-# @show length(state2input)
+# Run algorithm
+@time begin
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
+end
+@show length(state2input)
+@show length(state2backward[1])
 
 # # Plot all regions #
-# plt_in1  = plot_hrep_vanderpol(state2input, net_dict, space="input")
+plt_in1  = plot_hrep_vanderpol(state2input, net_dict, space="input")
+plt_in2  = plot_hrep_vanderpol(state2backward[1], net_dict, space="input")
 
 
 # fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict)
@@ -122,7 +124,7 @@ end
 
 
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, state2backward_chain, net_dict_chain, plt_in2 = find_roa("vanderpol", 20, 50)
+# A_roa, b_roa, state2backward_chain, net_dict_chain, plt_in2 = find_roa("vanderpol", 20, 1)
 # 10 steps is ~35k polytopes with ~300 polytopes in the BRS
 # 15 steps is 88,500 polytopes with 895 polytopes in the BRS
 # algorithm does ~1000 polytopes per minute.

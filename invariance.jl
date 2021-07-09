@@ -348,7 +348,7 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 	end
 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
 	Aₒ_chain, bₒ_chain = A_roa*Aₒᵤₜ, b_roa - A_roa*bₒᵤₜ
-	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], back=true, compact=true)
+	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], back=true, connected=true)
 	
 	if dynamics == "pendulum"
 		plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
