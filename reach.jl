@@ -490,7 +490,7 @@ end
 # Given input point and weights return ap2input, ap2output, ap2map, plt_in, plt_out
 # set reach=false for just cell enumeration
 # Supports looking for multiple backward reachable sets at once
-function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
+function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false, compact=false)
 	# Construct necessary data structures #
 	ap2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
 	ap2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
@@ -536,18 +536,32 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		check_ap(center, weights, ap)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap])
-		working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
-		ap2input[ap] = (A,b)
-
+		
 		reach ? ap2output[ap] = affine_map(A, b, C, d) : nothing
-		if back
+		if back && compact # only add neighbors of cells that are in the BRS
+			for k in 1:length(Aₒ)
+				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
+				if poly_intersection(A, b, Aᵤ, bᵤ)
+					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
+					working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
+				end
+			end
+		elseif back # add neighbors of all cells
 			for k in 1:length(Aₒ)
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
 					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
 				end
 			end
+			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
+		else
+			# add neighbors of all cells
+			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
 		end
+		ap2input[ap] = (A,b)
+		
+
+		
 
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end

@@ -12,8 +12,7 @@ function input_constraints_vanderpol(weights, type::String, net_dict)
 		A_pos = Matrix{Float64}(I, in_dim, in_dim)
 		A_neg = Matrix{Float64}(-I, in_dim, in_dim)
 		A = vcat(A_pos, A_neg)
-		b = 3.0*ones(2*in_dim)
-		b = vcat(2.5*ones(in_dim), 3.0*ones(in_dim))
+		b = [2.5, 3.0, 2.5, 3.0]
 	elseif type == "hexagon"
 		A = [1 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
 		b = [5, 5, 5, 5, 8, 8, 8, 8]
@@ -79,7 +78,7 @@ end
 
 # make gif of backwards reachable set over time
 function BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, steps)
-	plt = plot(HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-3, 3), ylims=(-3, 3))
+	plt = plot(HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-2.5, 2.5), ylims=(-3, 3))
 	anim = @animate for Step in 2:steps
 		weights, net_dict = vanderpol_net(Step)
 		Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
@@ -87,7 +86,7 @@ function BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, steps)
 		state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=true, verification=false)
     	plt = plot_hrep_pendulum(state2backward[1], net_dict, space="input", type="gif")
 	end
-	gif(anim, string("brs_",steps  ,".gif"), fps = 2)
+	gif(anim, string("vanderpol_brs_",steps  ,".gif"), fps = 2)
 end
 
 
@@ -109,7 +108,7 @@ end
 
 # # Run algorithm
 # @time begin
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, compact=true)
 # end
 # @show length(state2input)
 
@@ -123,11 +122,13 @@ end
 
 
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, state2backward_chain, net_dict_chain, plt_in2 = find_roa("vanderpol", 20, 10)
-# 10 steps is ~35k polytopes
+A_roa, b_roa, state2backward_chain, net_dict_chain, plt_in2 = find_roa("vanderpol", 20, 50)
+# 10 steps is ~35k polytopes with ~300 polytopes in the BRS
+# 15 steps is 88,500 polytopes with 895 polytopes in the BRS
+# algorithm does ~1000 polytopes per minute.
 # Create gif of backward reachable set
 # BRS_gif(model, Aᵢ, bᵢ, A_roa, b_roa, 5)
-
+nothing
 
 
 

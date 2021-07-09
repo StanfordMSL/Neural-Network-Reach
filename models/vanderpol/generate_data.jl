@@ -40,23 +40,23 @@ end
 
 
 # pyplot()
-# copies = 1 # copies = 1 is original network
-# weights, net_dict = vanderpol_net(copies)
+copies = 1 # copies = 1 is original network
+weights, net_dict = vanderpol_net(copies)
 
 
-# plt = plot(title="True", reuse=false)
-# plt_nn = plot(title="Neural Network", reuse=false)
-# for i in 1:20
-# 	n = 200
-# 	xₒ = [bound_r(-1., 1.), bound_r(-1., 1.)]
-# 	traj = gen_traj(xₒ, n)
-# 	traj_nn = compute_traj(xₒ, n, weights, net_dict, type="normal")
+plt = plot(title="True", reuse=false)
+plt_nn = plot(title="Neural Network", reuse=false)
+for i in 1:20
+	n = 200
+	xₒ = [bound_r(-1., 1.), bound_r(-1., 1.)]
+	traj = gen_traj(xₒ, n)
+	traj_nn = compute_traj(xₒ, n, weights, net_dict, type="normal")
 	
-# 	scatter!(plt, [xₒ[1]], [xₒ[2]], label=false, reuse=false)
-# 	scatter!(plt_nn, [xₒ[1]], [xₒ[2]], label=false, reuse=false)
-# 	plot!(plt, traj[1,:], traj[2,:], label=false, reuse=false)
-# 	plot!(plt_nn, traj_nn[1,:], traj_nn[2,:], label=false, reuse=false)
-# end
+	scatter!(plt, [xₒ[1]], [xₒ[2]], label=false, reuse=false)
+	scatter!(plt_nn, [xₒ[1]], [xₒ[2]], label=false, reuse=false)
+	plot!(plt, traj[1,:], traj[2,:], label=false, reuse=false)
+	plot!(plt_nn, traj_nn[1,:], traj_nn[2,:], label=false, reuse=false)
+end
 
 
 
