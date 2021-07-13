@@ -246,7 +246,7 @@ function invariant_polytope(Aₓ, bₓ, Aₒ, bₒ, C)
 
 	# Verify that found polytope is invariant
 	if is_invariant(F_res, C)
-		println("Found invariant polytope!.")
+		println("Found invariant polytope!")
 		return F_res, ones(size(F_res,1))
 	else
 		println("Polytope not invariant.")
@@ -309,6 +309,20 @@ function find_attractor(fixed_points, fp_dict)
 	return fp, C, d, Aₓ, bₓ
 end
 
+# Checks whether the PWA function given by state2map is a homeomorphism
+function is_homeomorphism(state2map, dim)
+	signs = Vector{Int64}(undef, dim)
+	for (i, key) in enumerate(keys(state2map))
+		C, d = state2map[key]
+		signs_i = [logabsdet(C)[2] for n in 1:dim]
+		if i == 1
+			signs = signs_i
+		elseif signs != signs_i || 0 ∈ signs_i
+			return false
+		end
+	end
+	return true
+end
 
 
 # Given a NN model, number of seed polytope ROA constraints, and number of backward reachability steps, compute ROA
@@ -331,6 +345,10 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 	state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
 	end
 	println("Dynamics function has ", length(state2input), " affine regions.") 
+
+	# Check if PWA function is a homeomorphism
+	homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
+	println("PWA function is a homeomorphism: ", homeomorph)
 
 	# Find fixed point(s) #
 	fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict)
