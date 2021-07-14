@@ -77,7 +77,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-copies = 51 # copies = 1 is original network
+copies = 1 # copies = 1 is original network
 model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
 
 weights, net_dict = pendulum_net(model, copies)
@@ -87,7 +87,7 @@ Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
 
 # Run algorithm
 @time begin
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=true, verification=false)
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
 end
 @show length(state2input)
 
@@ -95,3 +95,6 @@ end
 plt_in1  = plot_hrep_pendulum(state2input, net_dict, space="input")
 plt_in2  = plot_hrep_pendulum(state2backward[1], net_dict, space="input")
 plt_out = plot_hrep_pendulum(state2output, net_dict, space="output")
+
+
+# save("models/Pendulum/pendulum_pwa.jld2", Dict("state2input" => state2input, "state2map" => state2map, "net_dict" => net_dict, "Ai" => Aᵢ, "bi" => bᵢ))

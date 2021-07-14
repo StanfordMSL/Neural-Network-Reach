@@ -19,9 +19,9 @@ clc
 % plot(S)
 
 % Load in A,b, C,d cell arrays
-load('models/vanderpol/vanderpol_pwa.mat');
+load('vanderpol_pwa.mat');
 load('models/vanderpol/vanderpol_seed.mat');
-P_seed = Polyhedron(A_roa, b_roa);
+
 
 num_regions = length(A);
 for i = 1:num_regions
@@ -34,7 +34,5 @@ for i = 1:num_regions
 end
 
 pwa = PWASystem(systems);
-S = pwa.invariantSet('X', P_seed, 'maxIterations', 10); % Can add arguments of 'X' (seed set) and maxIterations
-plot(S)
-xlim([-2.5 2.5])
-ylim([-3 3])
+S = pwa.invariantSet('maxIterations', 1); % Can add arguments of 'X' (seed set) and maxIterations
+

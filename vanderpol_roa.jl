@@ -93,29 +93,35 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
+# save("models/vanderpol/vanderpol_pwa.jld2", Dict("state2input" => state2input, "state2map" => state2map, "net_dict" => net_dict, "Ai" => Aᵢ, "bi" => bᵢ))
+# matwrite("models/vanderpol/vanderpol_seed.mat", Dict("A_roa" => A_roa*A_norm_in, "b_roa" => b_roa- A_roa*b_norm_in))
+
 # Given a network representing discrete-time autonomous dynamics and state constraints,
 # ⋅ find fixed points
 # ⋅ verify the fixed points are stable equilibria
 # ⋅ compute invariant polytopes around the fixed points
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
-# copies = 1 # copies = 1 is original network
-# weights, net_dict = vanderpol_net(copies)
+copies = 2 # copies = 1 is original network
+weights, net_dict = vanderpol_net(copies)
 
 
-# Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
-# # # Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
+Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
+Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
+A_roa = Matrix{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["A_roa"])
+b_roa = Vector{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["b_roa"])
 
-# # Run algorithm
-# @time begin
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
-# end
-# @show length(state2input)
-# @show length(state2backward[1])
+# Run algorithm
+@time begin
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
+end
+@show length(state2input)
+@show length(state2backward[1])
 
-# # # Plot all regions #
+
+# Plot all regions #
 # plt_in1  = plot_hrep_vanderpol(state2input, net_dict, space="input")
-# plt_in2  = plot_hrep_vanderpol(state2backward[1], net_dict, space="input")
+plt_in2  = plot_hrep_vanderpol(state2backward[1], net_dict, space="input")
 
 # homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
 # println("PWA function is a homeomorphism: ", homeomorph)
@@ -126,13 +132,13 @@ end
 
 
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, state2backward_chain, net_dict_chain, plt_in2 = find_roa("vanderpol", 20, 3)
+# A_roa, b_roa, state2backward_chain, net_dict_chain, plt_in2 = find_roa("vanderpol", 20, 3)
 # 10 steps is ~35k polytopes with ~300 polytopes in the BRS
 # 15 steps is 88,500 polytopes with 895 polytopes in the BRS
 # algorithm does ~1000 polytopes per minute.
 # Create gif of backward reachable set
 # BRS_gif(model, Aᵢ, bᵢ, A_roa, b_roa, 5)
-nothing
+# nothing
 
 
 
