@@ -305,7 +305,7 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
 				neighbor_ap[l][n] = !neighbor_ap[l][n]
 			end 
-		elseif neuron_idx in type1
+		elseif neuron_idx in type1 # I think this should be deleted
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
 		# we know that a⋅x = b must be a subset of the new constraint set to be valid
 		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ≥0 (where b′ = b + Δ, Δ≥0) ⟹ a⋅x = b + Δ -s && Δ≥0 && s≥0 ⟹ a⋅x = b is satisfied for s = Δ, thus valid
