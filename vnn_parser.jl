@@ -2,8 +2,8 @@
 using LinearAlgebra
 
 function parse_vnn(filename)
-    strarr = readlines(string("/home/ubuntu/work/Neural-Network-Reach/", filename))
-    # strarr = readlines(string("/Neural-Network-Reach/", filename))
+    # strarr = readlines(string("/home/ubuntu/work/Neural-Network-Reach/", filename)) # for vnn comp evaluation
+    strarr = readlines(string("Neural-Network-Reach/", filename)) # for local evaluation
 
     x_var = r"declare-const X"
     y_var = r"declare-const Y"
@@ -27,7 +27,7 @@ function parse_vnn(filename)
     lbs = Vector{Float64}(undef, 0)
     ubs = Vector{Float64}(undef, 0)
 
-    label = parse(Int64, strarr[1][end-1])
+    label = parse(Int64, strarr[1][end-1]) + 1 # +1 to make 1 indexed istead of 0 indexed
 
     for line in strarr
         if occursin(x_var, line)

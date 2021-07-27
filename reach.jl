@@ -296,8 +296,6 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
 				neighbor_ap[l][n] = !neighbor_ap[l][n]
 			end 
-		elseif neuron_idx in type1
-			neighbor_ap[l][n] = !neighbor_ap[l][n]
 		# we know that a⋅x = b must be a subset of the new constraint set to be valid
 		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ≥0 (where b′ = b + Δ, Δ≥0) ⟹ a⋅x = b + Δ -s && Δ≥0 && s≥0 ⟹ a⋅x = b is satisfied for s = Δ, thus valid
 			nothing
@@ -358,6 +356,7 @@ function poly_intersection(A₁, b₁, A₂, b₂; presolve=false)
 	else
 		@show termination_status(model)
 		@show A₁; @show b₁; @show A₂; @show b₂
+		println("Intersection LP error!")
 		error("Intersection LP error!")
 	end
 end
@@ -414,6 +413,7 @@ end
 function check_ap(input, weights, ap)
 	if ap != get_ap(input, weights) 
 		@show input;  @show ap;  @show get_ap(input, weights)
+		println("NN ap not what it seems!")
 		error("NN ap not what it seems!")
 	end
 	return nothing
@@ -475,8 +475,6 @@ end
 
 
 
-
-
 ### MAIN ALGORITHM ###
 # Given input point and weights return ap2input, ap2output, ap2map, plt_in, plt_out
 # set reach=false for just cell enumeration
@@ -513,10 +511,15 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		# We can check this before removing redundant constraints
 		if verification
 			for k in 1:length(Aₒ)
+				println("k: ", k)
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
-				if poly_intersection(A, b, Aᵤ, bᵤ)
+				if poly_intersection(vcat(A, Aᵢ), vcat(b, bᵢ), Aᵤ, bᵤ)
+					violating_point, nothing, nothing = cheby_lp([], [], vcat(A, Aᵢ, Aᵤ), vcat(b, bᵢ, bᵤ), [])
 					verification_res = "violated"
 					verbose ? println("Property violated.") : nothing
+					@show maximum(bᵢ)
+					@show minimum(bᵢ)
+					@show violating_point
 					return ap2input, ap2output, ap2map, ap2backward, verification_res
 				end
 			end
