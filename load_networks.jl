@@ -140,9 +140,9 @@ end
 
 
 # Load pytorch networks saved as numpy variables
-function vanderpol_net(copies::Int64)
-	W = npzread("models/vanderpol/weights.npz")
-	params = npzread("models/vanderpol/norm_params.npz")
+function pytorch_net(model, copies::Int64)
+	W = npzread(string("models/", model, "/weights.npz"))
+	params = npzread(string("models/", model, "/norm_params.npz"))
 
 	num_layers = Int(length(W)/2)
 	layer_sizes = params["layer_sizes"]

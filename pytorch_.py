@@ -100,15 +100,16 @@ def test(dataloader, model, loss_fn):
 
 
 
-
-
+# Choose model: "vanderpol", "mpc"
+model = "vanderpol"
 
 if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
 
 # import data, normalize, split, and construct dataset classes
-X = numpy.load("models/vanderpol/X.npy")
-Y = numpy.load("models/vanderpol/Y.npy")
+# van der Pol
+X = numpy.load(string("models/", model, "/X.npy"))
+Y = numpy.load(string("models/", model, "/Y.npy"))
 
 X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
 Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
@@ -154,8 +155,8 @@ for name, param in model.named_parameters():
     # print('=====')
 
 # save weights and normalization parameters
-numpy.savez("models/vanderpol/weights.npz", *weights)
-numpy.savez("models/vanderpol/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+numpy.savez(string("models/", model, "/weights.npz"), *weights)
+numpy.savez(string("models/", model, "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
 model.eval()
 inpt = [0.5, 0.3]

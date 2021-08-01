@@ -80,7 +80,7 @@ end
 function BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, steps)
 	plt = plot(HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-2.5, 2.5), ylims=(-3, 3))
 	anim = @animate for Step in 2:steps
-		weights, net_dict = vanderpol_net(Step)
+		weights, net_dict = pytorch_net("vanderpol", Step)
 		Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
 		Aₒ, bₒ = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
 		state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=true, verification=false)
@@ -103,7 +103,7 @@ end
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
 copies = 2 # copies = 1 is original network
-weights, net_dict = vanderpol_net(copies)
+weights, net_dict = pytorch_net("vanderpol", copies)
 
 
 Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
