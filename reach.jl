@@ -305,6 +305,8 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
 				neighbor_ap[l][n] = !neighbor_ap[l][n]
 			end 
+		elseif neuron_idx ∈ type1 # i think this is wrong
+			neighbor_ap[l][n] = !neighbor_ap[l][n]
 		# we know that a⋅x = b must be a subset of the new constraint set to be valid
 		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ≥0 (where b′ = b + Δ, Δ≥0) ⟹ a⋅x = b + Δ -s && Δ≥0 && s≥0 ⟹ a⋅x = b is satisfied for s = Δ, thus valid
 			nothing
@@ -534,7 +536,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		check_ap(center, weights, ap)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap])
-		
+
 		reach ? ap2output[ap] = affine_map(A, b, C, d) : nothing
 		if back && connected # only add neighbors of cells that are in the BRS
 			for k in 1:length(Aₒ)

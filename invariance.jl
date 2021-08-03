@@ -177,7 +177,6 @@ function solve_sdp_jump(Fₒ, C)
 	@constraint(model, Q_diag .≥ 10.0*ones(n_cons))
 	# @constraint(model, Q_diag .≤ 1e6*ones(n_cons))
 	@constraint(model, R .≥ zeros(n_cons, n_cons))
-	
 	optimize!(model)
 	if termination_status(model) == MOI.OPTIMAL
 		return Diagonal(value.(Q_diag)), value.(R)
@@ -244,6 +243,7 @@ function invariant_polytope(Aₓ, bₓ, Aₒ, bₒ, C)
 	λ = solve_lp(Pₒ_jmp, n_cons, n_consₓ)
 	F_res = inv(Diagonal(λ))*Fₒ
 
+
 	# Verify that found polytope is invariant
 	if is_invariant(F_res, C)
 		println("Found invariant polytope!")
@@ -282,13 +282,11 @@ end
  function polytope_roa_sdp(Aₓ, bₓ, C, fp, num_constraints)
  	# Generate initial polytope
  	Aₛ, bₛ = random_polytope(fp, num_constraints)
-
  	# Put constraints in x̄ frame
 	Aₓ_ = Aₓ
 	bₓ_ = bₓ - Aₓ_*fp
 	Aₛ_ = Aₛ
 	bₛ_ = bₛ - Aₛ_*fp
-
 	A_roa_, b_roa_ = invariant_polytope(Aₓ_, bₓ_, Aₛ_, bₛ_, C)
 	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
  end
@@ -333,10 +331,17 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 		Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
 		println("Input set: pendulum")
 	elseif dynamics == "vanderpol"
-		weights, net_dict = vanderpol_net(1)
+		weights, net_dict = pytorch_net("vanderpol", 1)
 		Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
 		Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
 		println("Input set: van der Pol box")
+	elseif dynamics == "mpc"
+		weights, net_dict = pytorch_net("mpc", 1)
+		Aᵢ, bᵢ = input_constraints_mpc(weights, "box", net_dict)
+		Aₒ, bₒ = output_constraints_mpc(weights, "origin", net_dict)
+		println("Input set: MPC box")
+	else
+		error("Unrecognized dynamics!")
 	end
 
 	
@@ -357,12 +362,15 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 
 	# Find Polytopic ROA via SDP method # 
 	A_roa, b_roa = polytope_roa_sdp(Aₓ, bₓ, C, fp, num_constraints)
+	println("Found seed ROA!")
 
 	# Perform backward reachability on the seed invariant set
 	if dynamics == "pendulum"
 		weights_chain, net_dict_chain = pendulum_net(model, num_steps)
 	elseif dynamics == "vanderpol"
-		weights_chain, net_dict_chain = vanderpol_net(num_steps)
+		weights_chain, net_dict_chain = pytorch_net("vanderpol", num_steps)
+	elseif dynamics == "mpc"
+		weights_chain, net_dict_chain = pytorch_net("mpc", num_steps)
 	end
 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
 	Aₒ_chain, bₒ_chain = A_roa*Aₒᵤₜ, b_roa - A_roa*bₒᵤₜ
@@ -374,6 +382,9 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 	elseif dynamics == "vanderpol"
 		plt_in2  = plot_hrep_vanderpol(state2backward_chain[1], net_dict_chain, space="input")
 		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-3, 3), ylims=(-3, 3))
+	elseif dynamics == "mpc"
+		plt_in2  = plot_hrep_mpc(state2backward_chain[1], net_dict_chain, space="input")
+		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-5, 5), ylims=(-5, 5))
 	end
 
 	return A_roa, b_roa, state2backward_chain[1], net_dict_chain, plt_in2

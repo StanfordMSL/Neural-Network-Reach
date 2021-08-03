@@ -1,4 +1,4 @@
-using NPZ, LinearAlgebra, Convex, SCS, ECOS
+using NPZ, LinearAlgebra, Convex, MathOptInterface, SCS, ECOS
 
 # MPC for unstable LTI system #
 # dynamics from http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.483.6896&rep=rep1&type=pdf
@@ -36,8 +36,7 @@ function update(S, N)
 			return A*S + B*evaluate(u[:,1])
 		end
 	else
-		println("Suboptimal")
-		return false # not type stable
+		return [100., 100.] # kind of a hack
 	end
 
 	
@@ -49,8 +48,21 @@ bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,
 # generates data where each X[i,:] is an input and each corresponding Y[i,:] is an output
 # n is num_samples; N is lookahead horizon for MPC
 function gen_data(n, N)
-	X = hcat([[bound_r(-5.0, 5.0), bound_r(-5.0, 5.0)] for i in 1:n]...)'
-	Y = hcat([update(X[i,:], N) for i in 1:n]...)'
+	X = Matrix{Float64}(undef, n, 2)
+	Y = Matrix{Float64}(undef, n, 2)
+
+	for i in 1:n
+		while true
+			x = [bound_r(-5.0, 5.0), bound_r(-5.0, 5.0)]
+			y = update(x, N)
+			if y != [100., 100.] # hacky
+				X[i,:] = x
+				Y[i,:] = y
+				break
+			end
+		end
+	end
+
 	npzwrite("models/mpc/X.npy", X)
 	npzwrite("models/mpc/Y.npy", Y)
 	return nothing

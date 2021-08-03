@@ -75,7 +75,7 @@ def train(dataloader, model, loss_fn, optimizer):
         loss.backward()
         optimizer.step()
 
-        if batch % 1000 == 0:
+        if batch % 20 == 0:
             loss, current = loss.item(), batch * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
@@ -100,16 +100,16 @@ def test(dataloader, model, loss_fn):
 
 
 
-# Choose model: "vanderpol", "mpc"
-model = "vanderpol"
+# Choose dynamics: "vanderpol", "mpc"
+dynamics = "mpc"
 
 if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
 
 # import data, normalize, split, and construct dataset classes
 # van der Pol
-X = numpy.load(string("models/", model, "/X.npy"))
-Y = numpy.load(string("models/", model, "/Y.npy"))
+X = numpy.load("models/" + dynamics + "/X.npy")
+Y = numpy.load("models/" + dynamics + "/Y.npy")
 
 X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
 Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
@@ -137,7 +137,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
 print("\n", model)
 
 # Train
-epochs = 3
+epochs = 10
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
@@ -155,8 +155,8 @@ for name, param in model.named_parameters():
     # print('=====')
 
 # save weights and normalization parameters
-numpy.savez(string("models/", model, "/weights.npz"), *weights)
-numpy.savez(string("models/", model, "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+numpy.savez("models/" + dynamics + "/weights.npz", *weights)
+numpy.savez("models/" + dynamics + "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
 model.eval()
 inpt = [0.5, 0.3]
