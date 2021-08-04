@@ -160,20 +160,24 @@ function pytorch_net(model, copies::Int64)
 	net_dict["layer_sizes"] = layer_sizes
 	net_dict["input_size"] = layer_sizes[1]
 	net_dict["output_size"] = layer_sizes[end]
-	net_dict["input_norm_map"] = (Aᵢₙ, bᵢₙ)
-	net_dict["output_unnorm_map"] = (Aₒᵤₜ, bₒᵤₜ) 
 
 
 	w = Vector{Array{Float64,2}}(undef, num_layers)
-	for i in 1:(num_layers-1)
+	weight = W[string("arr_", 0)]*Aᵢₙ
+	bias   = W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ
+	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[1][end,end] = 1
+	for i in 2:(num_layers-1)
 		weight = W[string("arr_", 2*(i-1))]
 		bias   = W[string("arr_", 2*(i-1)+1)]
 		w[i] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]),1,:))
 		w[i][end,end] = 1
 	end
-	weight = W[string("arr_", 2*(num_layers-1))]
-	bias   = W[string("arr_", 2*(num_layers-1)+1)]
+
+	weight = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
+	bias   = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ
 	w[end] = hcat(weight, vec(bias))
+
 
 	# chain together multiple networks
 	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
@@ -188,12 +192,92 @@ function pytorch_net(model, copies::Int64)
 		elseif k in merged_layers
 			w̄ₒ = vcat(w[end], reshape(zeros(1+layer_sizes[end-1]),1,:))
 			w̄ₒ[end,end] = 1
-			Āₒ = vcat(hcat(Aₒᵤₜ, bₒᵤₜ), reshape(zeros(1+layer_sizes[end]),1,:))
-			Āₒ[end,end] = 1
-			Āᵢ = vcat(hcat(Aᵢₙ, bᵢₙ), reshape(zeros(1+layer_sizes[1]),1,:))
-			Āᵢ[end,end] = 1
-			
-			weights[k] = w[1]*Āᵢ*Āₒ*w̄ₒ
+			weights[k] = w[1]*w̄ₒ
+			w_idx = 2
+		else
+			weights[k] = w[w_idx]
+			w_idx += 1
+		end
+	end
+
+	return weights, net_dict
+end
+
+
+
+# Load pytorch networks that are controllers for linear MPC models
+function pytorch_mpc_net(model, copies::Int64)
+	W = npzread(string("models/", model, "/weights.npz"))
+	params = npzread(string("models/", model, "/norm_params.npz"))
+
+	# x_+ = Ax + Bu
+	A = [1.2 1.2; 0.0 1.2]
+	B = reshape([1.0, 0.4], (2,1))
+
+	num_layers = Int(length(W)/2)
+	layer_sizes = params["layer_sizes"]
+
+	# make net_dict
+	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
+	μᵢ = Float64.(vec(params["X_mean"]))
+	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
+	μₒ = Float64.(vec(params["Y_mean"]))
+	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
+	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
+
+	# make identity weights
+	sze = layer_sizes[1]
+	II = Matrix{Float64}(I, sze, sze)
+	w_I1 = [II; -II]
+	w_Im = [II -II; -II II]
+	b_I = zeros(2*sze)
+
+	# make single network augmented weights
+	w = Vector{Array{Float64,2}}(undef, num_layers)
+	weight = vcat(W[string("arr_", 0)]*Aᵢₙ, w_I1)
+	bias   = vcat(W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ, b_I)
+	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[1][end,end] = 1
+	for i in 2:(num_layers-1)
+		weight = vcat(W[string("arr_", 2*(i-1))], zeros(2*sze,layer_sizes[i]))
+		weight = hcat(weight, vcat(zeros(layer_sizes[i+1],2*sze), w_Im))
+		bias   = vcat(W[string("arr_", 2*(i-1)+1)], b_I)
+		w[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]+2*sze),1,:))
+		w[i][end,end] = 1
+	end
+	
+	weight = B*Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
+	weight = hcat(weight, [A -A])
+	bias   = B*(Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ)
+	w[end] = hcat(weight, vec(bias))
+
+	# change layer sizes to be correct for this new network
+	for i in 2:length(layer_sizes)-1
+		layer_sizes[i] += 2*sze 
+	end
+	layer_sizes[end] = layer_sizes[1]
+
+	# Make net_dict
+	net_dict = Dict()
+	net_dict["num_layers"] = num_layers
+	net_dict["layer_sizes"] = layer_sizes
+	net_dict["input_size"] = layer_sizes[1]
+	net_dict["output_size"] = layer_sizes[end]
+
+	# chain together multiple networks
+	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
+	merged_layers = [c*num_layers - (c-1) for c in 1:copies]
+	w_idx = 1
+	for k in 1:length(weights)
+		if k == 1
+			weights[k] = w[1]
+			w_idx += 1
+		elseif k == length(weights)
+			weights[k] = w[end]
+		elseif k in merged_layers
+			w̄ₒ = vcat(w[end], reshape(zeros(1+layer_sizes[end-1]),1,:))
+			w̄ₒ[end,end] = 1
+			weights[k] = w[1]*w̄ₒ
 			w_idx = 2
 		else
 			weights[k] = w[w_idx]

@@ -31,12 +31,12 @@ function update(S, N)
 
 	if problem.status == MathOptInterface.OPTIMAL
 		if N == 1
-			return A*S + B*evaluate(u)
+			return [evaluate(u)]
 		else
-			return A*S + B*evaluate(u[:,1])
+			return evaluate(u[:,1])
 		end
 	else
-		return [100., 100.] # kind of a hack
+		return [100.] # kind of a hack
 	end
 
 	
@@ -49,13 +49,13 @@ bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,
 # n is num_samples; N is lookahead horizon for MPC
 function gen_data(n, N)
 	X = Matrix{Float64}(undef, n, 2)
-	Y = Matrix{Float64}(undef, n, 2)
+	Y = Matrix{Float64}(undef, n, 1)
 
 	for i in 1:n
 		while true
 			x = [bound_r(-5.0, 5.0), bound_r(-5.0, 5.0)]
 			y = update(x, N)
-			if y != [100., 100.] # hacky
+			if y != [100.] # hacky
 				X[i,:] = x
 				Y[i,:] = y
 				break

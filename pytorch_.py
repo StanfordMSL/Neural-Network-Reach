@@ -154,6 +154,7 @@ for name, param in model.named_parameters():
     weights.append(param.detach().numpy())
     # print('=====')
 
+    
 # save weights and normalization parameters
 numpy.savez("models/" + dynamics + "/weights.npz", *weights)
 numpy.savez("models/" + dynamics + "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)

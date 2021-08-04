@@ -5,7 +5,7 @@ include("unique_custom.jl")
 ϵ = 1e-10 # used for numerical tolerances throughout
 
 ### GENERAL PURPOSE FUNCTIONS ###
-function normalize_row(row::Vector{Float64}; return_zero=false)
+function normalize_row_old(row::Vector{Float64}; return_zero=false)
 	for i in 1:length(row)
 		if abs(row[i]) > 1e-12 # ith element nonzero
 			return row ./ abs(row[i]) 
@@ -15,6 +15,16 @@ function normalize_row(row::Vector{Float64}; return_zero=false)
 			@show row
 			error("Rethink how you normalize rows!")
 		end
+	end
+end
+
+function normalize_row(row::Vector{Float64})
+	scale = norm(row[1:end-1])
+	size = length(row)-1
+	if scale > ϵ
+		return row / scale
+	else
+		return vcat(zeros(size), [row[end]])
 	end
 end
 
@@ -56,7 +66,7 @@ function neuron_map(layer, neuron, ap, weights; normalize=true)
 	end
 	matrix = weights[layer]*matrix
 	if normalize
-		return normalize_row(matrix[neuron,:], return_zero=true)
+		return normalize_row(matrix[neuron,:])
 	else
 		return matrix[neuron,:]
 	end
@@ -305,16 +315,13 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
 				neighbor_ap[l][n] = !neighbor_ap[l][n]
 			end 
-		elseif neuron_idx ∈ type1 # i think this is wrong
-			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		# we know that a⋅x = b must be a subset of the new constraint set to be valid
-		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ≥0 (where b′ = b + Δ, Δ≥0) ⟹ a⋅x = b + Δ -s && Δ≥0 && s≥0 ⟹ a⋅x = b is satisfied for s = Δ, thus valid
+		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b 
 			nothing
-		elseif isapprox(a′, a, atol=ϵ ) && b′ < b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ<0 (where b′ = b + Δ, Δ<0) ⟹ a⋅x = b + Δ -s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+		elseif isapprox(a′, a, atol=ϵ ) && b′ < b
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≤ b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ≥0 (where -b′ = b - Δ, Δ≥0) ⟹ a⋅x = b - Δ + s && Δ≥0 && s≥0 ⟹ a⋅x = b for s = Δ, thus valid
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ < b
 			nothing
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ > b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ<0 (where -b′ = b - Δ, Δ<0) ⟹ a⋅x = b - Δ + s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≥ b
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
 		else
 			error("Check neuron flipping rules.")

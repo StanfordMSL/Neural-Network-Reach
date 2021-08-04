@@ -19,9 +19,7 @@ function input_constraints_mpc(weights, type::String, net_dict)
 	else
 		error("Invalid input constraint specification.")
 	end
-
-	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
-	return A*inv(Aᵢₙ), b + A*inv(Aᵢₙ)*bᵢₙ
+	return A, b
 end
 
 # Returns H-rep of various output sets
@@ -35,32 +33,16 @@ function output_constraints_mpc(weights, type::String, net_dict)
  	else 
  		error("Invalid input constraint specification.")
  	end
- 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
- 	return A*Aₒᵤₜ, b - A*bₒᵤₜ
+ 	return A, b
 end
 
 
 # Plot all polytopes
-function plot_hrep_mpc(state2constraints, net_dict; space = "input", type="normal")
+function plot_hrep_mpc(state2constraints, net_dict; type="normal")
 	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
 	for state in keys(state2constraints)
 		A, b = state2constraints[state]
-		if space == "input"	
-			# Each cell is in the form Axₙ≤b
-			# The network takes normalized inputs: xₙ = Aᵢₙx + bᵢₙ
-			# Thus the input constraints are: A*Aᵢₙx ≤ b - A*bᵢₙ
-			Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
-			reg = HPolytope(constraints_list(A*Aᵢₙ, b - A*bᵢₙ))
-		elseif space == "output"
-			# Each cell is in the form Ay≤b
-			# The raw network outputs are unnormalized: yₒᵤₜ = Aₒᵤₜy + bₒᵤₜ ⟹ y = inv(Aₒᵤₜ)*(yₒᵤₜ - bₒᵤₜ)
-			# Thus the output constraints are: A*inv(Aₒᵤₜ)*y ≤ b + A*inv(Aₒᵤₜ)*bₒᵤₜ
-			Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
-			reg = HPolytope(constraints_list(A*inv(Aₒᵤₜ), b + A*inv(Aₒᵤₜ)*bₒᵤₜ))
-		else
-			error("Invalid arg given for space")
-		end
-		
+		reg = HPolytope(constraints_list(A,b))
 		if isempty(reg)
 			@show reg
 			error("Empty polyhedron.")
@@ -80,11 +62,9 @@ end
 function BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, steps)
 	plt = plot(HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-2.5, 2.5), ylims=(-3, 3))
 	anim = @animate for Step in 2:steps
-		weights, net_dict = pytorch_net("mpc", Step)
-		Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
-		Aₒ, bₒ = Aₛ*Aₒᵤₜ, bₛ - Aₛ*bₒᵤₜ
-		state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=true, verification=false)
-    	plt = plot_hrep_pendulum(state2backward[1], net_dict, space="input", type="gif")
+		weights, net_dict = pytorch_mpc_net("mpc", Step)
+		state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₛ], [bₛ], reach=false, back=true, verification=false)
+    	plt = plot_hrep_pendulum(state2backward[1], net_dict, type="gif")
 	end
 	gif(anim, string("mpc_brs_",steps  ,".gif"), fps = 2)
 end
@@ -104,27 +84,27 @@ end
 # ⋅ compute invariant polytopes around the fixed points
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
-copies = 10 # copies = 1 is original network
-weights, net_dict = pytorch_net("mpc", copies)
+copies = 1 # copies = 1 is original network
 
+weights, net_dict = pytorch_mpc_net("mpc", copies)
 
 Aᵢ, bᵢ = input_constraints_mpc(weights, "box", net_dict)
-# Aₒ, bₒ = output_constraints_mpc(weights, "origin", net_dict)
-A_roa = Matrix{Float64}(matread("models/mpc/mpc_seed.mat")["A_roa"])
-b_roa = Vector{Float64}(matread("models/mpc/mpc_seed.mat")["b_roa"])
+Aₒ, bₒ = output_constraints_mpc(weights, "origin", net_dict)
+# A_roa = Matrix{Float64}(matread("models/mpc/mpc_seed.mat")["A_roa"])
+# b_roa = Vector{Float64}(matread("models/mpc/mpc_seed.mat")["b_roa"])
 
 # Run algorithm
 @time begin
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
 end
 @show length(state2input)
-@show length(state2backward[1])
+# @show length(state2backward[1])
 
 
 # Plot all regions #
-plt_in1  = plot_hrep_mpc(state2input, net_dict, space="input")
-plt_in2  = plot_hrep_mpc(state2backward[1], net_dict, space="input")
+plt_in1  = plot_hrep_mpc(state2input, net_dict)
+# plt_in2  = plot_hrep_mpc(state2backward[1], net_dict)
 
 # homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
 # println("PWA function is a homeomorphism: ", homeomorph)
@@ -190,7 +170,7 @@ plt_in2  = plot_hrep_mpc(state2backward[1], net_dict, space="input")
 
 
 # i, state, A_, b_ = i_step_invariance(fixed_points[1], 1)
-# plt_seed = plot_hrep_pendulum(Dict(state => (A_, b_)), net_dict; space = "input")
+# plt_seed = plot_hrep_pendulum(Dict(state => (A_, b_)), net_dict)
 
 
 
@@ -314,7 +294,7 @@ plt_in2  = plot_hrep_mpc(state2backward[1], net_dict, space="input")
 
 
 
-# plt_in3  = plot_hrep_pendulum(state2invariant, net_dict, space="input")
+# plt_in3  = plot_hrep_pendulum(state2invariant, net_dict)
 
 
 
