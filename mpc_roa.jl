@@ -14,8 +14,8 @@ function input_constraints_mpc(weights, type::String, net_dict)
 		A = vcat(A_pos, A_neg)
 		b = [5.0, 5.0, 5.0, 5.0]
 	elseif type == "hexagon"
-		A = [1 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
-		b = [5, 5, 5, 5, 8, 8, 8, 8]
+		A = [1. 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
+		b = [5., 5, 5, 5, 8, 8, 8, 8]
 	else
 		error("Invalid input constraint specification.")
 	end
@@ -42,16 +42,20 @@ function plot_hrep_mpc(state2constraints, net_dict; type="normal")
 	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
 	for state in keys(state2constraints)
 		A, b = state2constraints[state]
+		@show state
+		@show A
+		@show b
 		reg = HPolytope(constraints_list(A,b))
+		
 		if isempty(reg)
 			@show reg
 			error("Empty polyhedron.")
 		end
 
 		if type == "normal"
-			plot!(plt,  reg, xlims=(-5., 5.), ylims=(-5., 5.), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+			plot!(plt, reg, xlims=(-5., 5.), ylims=(-5., 5.), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 		elseif type == "gif"
-			plot!(plt,  reg, xlims=(-5., 5.), ylims=(-5., 5.), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+			plot!(plt, reg, xlims=(-5., 5.), ylims=(-5., 5.), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
 		end
 	end
 	return plt
@@ -87,6 +91,8 @@ end
 copies = 1 # copies = 1 is original network
 
 weights, net_dict = pytorch_mpc_net("mpc", copies)
+# weights, net_dict = pytorch_net("mpc", copies)
+
 
 Aᵢ, bᵢ = input_constraints_mpc(weights, "box", net_dict)
 Aₒ, bₒ = output_constraints_mpc(weights, "origin", net_dict)
@@ -103,8 +109,45 @@ end
 
 
 # Plot all regions #
-plt_in1  = plot_hrep_mpc(state2input, net_dict)
+# plt_in1  = plot_hrep_mpc(state2input, net_dict)
 # plt_in2  = plot_hrep_mpc(state2backward[1], net_dict)
+
+
+# ap = BitArray{1}[[1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1], [1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1]]
+# A, b = state2input[ap]
+# A_, b_ = vcat(A[1:12,:], A[14:25,:], A[27:30,:]), vcat(b[1:12], b[14:25], b[27:30])
+# plot(HPolytope(constraints_list(A_,b_)))
+
+# ap = BitArray{1}[[1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1], [1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1]]
+
+# A = [0.49814329921549005 0.8670947199970178; 0.4721004648342292 0.881544752751274; -0.463378596448672 -0.8861604123144177]
+# b = [0.7506980875060484, 0.7263940803964747, -0.7116552724988069]
+
+# HalfSpace([0.49814329921549005, 0.8670947199970178], 0.7506980875060484)
+# HalfSpace([0.4721004648342292, 0.881544752751274], 0.7263940803964747)
+# HalfSpace([-0.463378596448672, -0.8861604123144177], -0.7116552724988069)
+
+# plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
+# plot!(plt, LazySets.HalfSpace([0.49814329921549005, 0.8670947199970178], 0.7506980875060484), xlims=(-5., 5.), ylims=(-5., 5.), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+# plot!(plt, LazySets.HalfSpace([0.4721004648342292, 0.881544752751274], 0.7263940803964747), xlims=(-5., 5.), ylims=(-5., 5.), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+# plot!(plt, LazySets.HalfSpace([-0.463378596448672, -0.8861604123144177], -0.7116552724988069), xlims=(-5., 5.), ylims=(-5., 5.), fontfamily=font(40, "Computer Modern"), yguidefont=(14) , xguidefont=(14), tickfont = (12))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
 # println("PWA function is a homeomorphism: ", homeomorph)

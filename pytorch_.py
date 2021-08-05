@@ -130,7 +130,7 @@ batch_size = 20
 train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
-layer_sizes = numpy.array([in_dim, 20, 20, out_dim])
+layer_sizes = numpy.array([in_dim, 8, 8, out_dim])
 model = FFReLUNet(layer_sizes).to(device)
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
