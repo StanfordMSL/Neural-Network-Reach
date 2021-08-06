@@ -98,6 +98,17 @@ end
 
 
 ### FUNCTIONS FOR GETTING CONSTRAINTS ###
+function positive_zeros(A)
+    k = 1
+    @inbounds for t in eachindex(A)
+        if isequal(A[t], -0.0)
+            A[t] = 0.0
+            k += 1
+        end
+    end
+    return A
+end
+
 # Get redundant A≤b constraints
 function get_constraints(weights::Vector{Matrix{Float64}}, ap::Vector{BitVector}, num_neurons)
 	L = length(weights)
@@ -124,11 +135,9 @@ function get_constraints(weights::Vector{Matrix{Float64}}, ap::Vector{BitVector}
 		lin_map = diagm(0 => ap[layer])*weights[layer]*lin_map
 	end
 
+	A = positive_zeros(A)
 	unique_rows, unique_row = unique_custom(A, dims=1)
-	if ap == BitArray{1}[[1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1], [1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1]]
-		@show unique_rows
-		@show unique_row
-	end
+
 	for i in 1:length(unique_row)
 		idx2repeat[i] = findall(x-> x == i, unique_row)
 	end
@@ -161,25 +170,12 @@ function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential)
 	unknown_set    = setdiff(non_redundant, essential)           # working non-redundant and non-essential set
 	unknown_setᵢ   = setdiff(non_redundantᵢ, essentialᵢ)         # working non-redundant and non-essential set
 
-	if unique_nonzerow_indices == [16, 1, 20, 4, 7, 8, 14, 10, 2, 9, 18, 25, 11, 5, 24, 17, 3, 15, 12, 19, 6, 21]
-		@show essential
-		@show non_redundant
-		@show unknown_set
-	end
 	essential, essentialᵢ = exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ)
-	
-	if unique_nonzerow_indices == [16, 1, 20, 4, 7, 8, 14, 10, 2, 9, 18, 25, 11, 5, 24, 17, 3, 15, 12, 19, 6, 21]
-		@show essential
-	end
-
 	essential == [] && essentialᵢ == [] ? error("No essential constraints!") : nothing
 	saved_lps = length(essential)+length(essentialᵢ) + length(redundant)+length(redundantᵢ)-2*size(A,2)
 	solved_lps = 2*size(A,2) + length(unknown_set) + length(unknown_setᵢ)
 
 	if bᵢ != []
-		if unique_nonzerow_indices == [16, 1, 20, 4, 7, 8, 14, 10, 2, 9, 18, 25, 11, 5, 24, 17, 3, 15, 12, 19, 6, 21]
-			@show essentialᵢ
-		end
 		return vcat(A[essential,:], Aᵢ[essentialᵢ,:]), vcat(b[essential], bᵢ[essentialᵢ]), sort(essential), saved_lps, solved_lps
 	else
 		return A[essential,:], b[essential], sort(essential), saved_lps, solved_lps
@@ -243,10 +239,6 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 		k > 1 ? set_normalized_rhs(con[unknown_set[k-1]], b[unknown_set[k-1]]) : nothing # un-relax i-1 constraint
 		optimize!(model)
 		if termination_status(model) == MOI.OPTIMAL
-			if i == 9
-				@show b[i]
-				@show objective_value(model)
-			end
 			if objective_value(model) > b[i] + ϵ # 1e-15 is too small.
 				push!(essential, i)
 			end
@@ -308,13 +300,6 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 		type1 = idx2repeat[idx]
 		type2 = zerows
 		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
-
-		if neighbor_ap == BitArray{1}[[0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1], [0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1]]
-			println("Parent AP: ")
-			@show ap
-			println("Neighbor idx: ")
-			@show idx
-		end
 
 		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set
 			push!(working_set, neighbor_ap)
@@ -495,7 +480,6 @@ function cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
 		length(constraints)-2 != length(b)+length(bᵢ) ? (error("Not enough dual variables!")) : nothing
 		essential  = [i for i in 1:length(b) if abs(dual(constraints[i])) > 1e-4]
 		essentialᵢ = [i-length(b) for i in length(b)+1:length(constraints)-2 if abs(dual(constraints[i])) > 1e-4]
-		@show value.(r)
 		if value.(r) == 1e4
 			println("Unbounded!")
 		end
@@ -577,12 +561,6 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
 		check_ap(center, weights, ap)
 
-		if ap == BitArray{1}[[1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1], [1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1]]
-			@show unique_nonzerow_indices
-			@show A[9,:] == A[11,:]
-			@show b[9] == b[11]
-			@show zerows
-		end
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap])
 
 

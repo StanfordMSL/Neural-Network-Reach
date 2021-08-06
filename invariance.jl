@@ -10,11 +10,12 @@ end
 
 # Return trajectory of discrete time system where each column is the state at step i
 # Julia arrays are stored in column-major order so it's faster to do matrix[:,i] = data rather than matrix[i,:] = data
-function compute_traj(init, steps::Int64, weights, net_dict; type="normal")
-	state_traj = Matrix{Float64}(undef, net_dict["input_size"], steps+1)
+function compute_traj(init, steps::Int64, weights; type="normal")
+	dim = size(weights[1], 2) - 1
+	state_traj = Matrix{Float64}(undef, dim, steps+1)
 	state_traj[:,1] = init
 	for i in 1:steps
-		state_traj[:,i+1] = eval_net(state_traj[:,i], weights, net_dict, 1, type=type)
+		state_traj[:,i+1] = eval_net(state_traj[:,i], weights, 1, type=type)
 	end
 	return state_traj
 end
@@ -27,32 +28,19 @@ function plot_traj(state_traj)
 end
 
 # Iterate through each cell cᵢ in a PWA function and find fixed points if they exist.
-# The raw neural network has affine functions: ỹ = Cx̃ + d
-# The networks inputs and outputs are normalized/unnormalized as: x̃ = Aᵢₙx + bᵢₙ, y = Aₒᵤₜỹ + bₒᵤₜ
-# Thus, y = Aₒᵤₜ(C(Aᵢₙx + bᵢₙ) + d) + bₒᵤₜ = Aₒᵤₜ(CAᵢₙx + Cbᵢₙ + d) + bₒᵤₜ = AₒᵤₜCAᵢₙx + AₒᵤₜCbᵢₙ + Aₒᵤₜd + bₒᵤₜ
-# ⟹ C̄ = AₒᵤₜCAᵢₙ, d̄ = AₒᵤₜCbᵢₙ + Aₒᵤₜd + bₒᵤₜ
-# Fixed point p satisfies: C̄p + d̄ = p ⟹ (I - C̄)p = d̄.
-# p must lie in the polytope for which the affine map is valid
-# The raw neural network has polytopes Ax̄ ≤ b  ⟹  A(Aᵢₙx + bᵢₙ) ≤ b  ⟹  AAᵢₙx ≤ b - Abᵢₙ  ⟹  Ā = AAᵢₙ, b̄ = b - Abᵢₙ
-function find_fixed_points(state2map, state2input, weights, net_dict)
-	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
-	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
-	dim = net_dict["input_size"]
+function find_fixed_points(state2map, state2input, weights)
+	dim = size(weights[1], 2) - 1
 	fixed_points = Vector{Vector{Float64}}(undef, 0)
-	fp_dict = Dict{ Vector{Float64}, Vector{Tuple{Matrix{Float64},Vector{Float64}}} }() # stores [(Ā, b̄), (C̄, d̄)]
+	fp_dict = Dict{ Vector{Float64}, Vector{Tuple{Matrix{Float64},Vector{Float64}}} }() # stores [(A,b), (C,d)]
 	for ap in keys(state2map)
 		C, d = state2map[ap]
 		A, b = state2input[ap]
-		C̄ = Aₒᵤₜ*C*Aᵢₙ
-		d̄ = Aₒᵤₜ*C*bᵢₙ + Aₒᵤₜ*d + bₒᵤₜ
-		Ā = A*Aᵢₙ
-		b̄ = b - A*bᵢₙ
 
-		if rank(I - C̄) == dim
-			fp = inv(I - C̄) * d̄
-			if in_polytope(fp, Ā, b̄) && (eval_net(fp, weights, net_dict, 1) ≈ fp) # second condition is sanity check
+		if rank(I - C) == dim
+			fp = inv(I - C) * d
+			if in_polytope(fp, A, b) && (eval_net(fp, weights, 1) ≈ fp) # second condition is sanity check
 				push!(fixed_points, fp)
-				fp_dict[fp] = [(Ā, b̄), (C̄, d̄)]
+				fp_dict[fp] = [(A, b), (C, d)]
 				println("Found fixed point.")
 			end
 		else
@@ -99,9 +87,8 @@ end
 
 # Checks whether a given polyhedron is bounded (i.e. is a polyotpe)
 # Can be made faster by solving Cheby LP
-function is_polytope(A, b)
-	return isbounded(HPolyhedron(constraints_list(A, b)))
-end
+is_polytope(A, b) = isbounded(HPolyhedron(constraints_list(A, b)))
+
 
 # Checks whether a given polytope is a subset of a given ellipsoid
 function check_P_in_E(A, b, Q, α, fp)
@@ -143,15 +130,12 @@ function random_polytope(fp, num_constraints)
 end
 
 # Plot convergence over time of some points to a fixed point
-function convergence(fp, state2backward, weights, net_dict, traj_length)
+function convergence(fp, state2backward, weights, traj_length)
 	plt = plot(title="Distance to Fixed Point vs Time-Step", xlabel="Time-Step", ylabel="Distance")
 	for state in keys(state2backward)
 		Aᵢ, bᵢ = state2backward[state]
-		Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
-		Ā = Aᵢ*Aᵢₙ
-		b̄ = bᵢ - Aᵢ*bᵢₙ
-		xₒ, nothing, nothing = cheby_lp([], [], Ā, b̄, [])
-		state_traj = compute_traj(xₒ, traj_length, weights, net_dict)
+		xₒ, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])
+		state_traj = compute_traj(xₒ, traj_length, weights)
 		distances = [norm(state_traj[:,k] - fp) for k in 1:traj_length+1]
 		plot!(plt, 1:traj_length+1, distances, label=false)
 	end
@@ -326,19 +310,19 @@ end
 # Given a NN model, number of seed polytope ROA constraints, and number of backward reachability steps, compute ROA
 function find_roa(dynamics::String, num_constraints, num_steps)
 	if dynamics == "pendulum"
-		weights, net_dict = pendulum_net("models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat", 1)
-		Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum", net_dict)
-		Aₒ, bₒ = output_constraints_pendulum(weights, "origin", net_dict)
+		weights = pendulum_net("models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat", 1)
+		Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum")
+		Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
 		println("Input set: pendulum")
 	elseif dynamics == "vanderpol"
-		weights, net_dict = pytorch_net("vanderpol", 1)
-		Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box", net_dict)
-		Aₒ, bₒ = output_constraints_vanderpol(weights, "origin", net_dict)
+		weights = pytorch_net("vanderpol", 1)
+		Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box")
+		Aₒ, bₒ = output_constraints_vanderpol(weights, "origin")
 		println("Input set: van der Pol box")
 	elseif dynamics == "mpc"
-		weights, net_dict = pytorch_net("mpc", 1)
-		Aᵢ, bᵢ = input_constraints_mpc(weights, "box", net_dict)
-		Aₒ, bₒ = output_constraints_mpc(weights, "origin", net_dict)
+		weights = pytorch_net("mpc", 1)
+		Aᵢ, bᵢ = input_constraints_mpc(weights, "box")
+		Aₒ, bₒ = output_constraints_mpc(weights, "origin")
 		println("Input set: MPC box")
 	else
 		error("Unrecognized dynamics!")
@@ -356,7 +340,7 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 	println("PWA function is a homeomorphism: ", homeomorph)
 
 	# Find fixed point(s) #
-	fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights, net_dict)
+	fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
 	fp, C, d, Aₓ, bₓ = find_attractor(fixed_points, fp_dict)
 
 
@@ -366,124 +350,25 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 
 	# Perform backward reachability on the seed invariant set
 	if dynamics == "pendulum"
-		weights_chain, net_dict_chain = pendulum_net(model, num_steps)
+		weights_chain = pendulum_net(model, num_steps)
 	elseif dynamics == "vanderpol"
-		weights_chain, net_dict_chain = pytorch_net("vanderpol", num_steps)
+		weights_chain = pytorch_net("vanderpol", num_steps)
 	elseif dynamics == "mpc"
-		weights_chain, net_dict_chain = pytorch_net("mpc", num_steps)
+		weights_chain = pytorch_net("mpc", num_steps)
 	end
-	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
-	Aₒ_chain, bₒ_chain = A_roa*Aₒᵤₜ, b_roa - A_roa*bₒᵤₜ
-	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [Aₒ_chain], [bₒ_chain], back=true, connected=true)
+	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [A_roa], [b_roa], back=true, connected=true)
 	
 	if dynamics == "pendulum"
-		plt_in2  = plot_hrep_pendulum(state2backward_chain[1], net_dict_chain, space="input")
+		plt_in2  = plot_hrep_pendulum(state2backward_chain[1])
 		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-90, 90), ylims=(-90, 90))
 	elseif dynamics == "vanderpol"
-		plt_in2  = plot_hrep_vanderpol(state2backward_chain[1], net_dict_chain, space="input")
+		plt_in2  = plot_hrep_vanderpol(state2backward_chain[1])
 		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-3, 3), ylims=(-3, 3))
 	elseif dynamics == "mpc"
-		plt_in2  = plot_hrep_mpc(state2backward_chain[1], net_dict_chain, space="input")
+		plt_in2  = plot_hrep_mpc(state2backward_chain[1])
 		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-5, 5), ylims=(-5, 5))
 	end
 
-	return A_roa, b_roa, state2backward_chain[1], net_dict_chain, plt_in2
+	return A_roa, b_roa, state2backward_chain[1], plt_in2
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## OLD ##
-
-# # Sample P matrix s.t. P .≥ 0 && P*1 ≤ 1
-# function sample_P(λ_c, constraints)
-# 	# Each row is rand() * a randomly sampled vector from the unit simplex
-# 	P = Matrix{Float64}(undef, constraints, constraints)
-# 	for row in 1:constraints
-# 		P[row, :] = rand()*rand(Dirichlet(ones(constraints)))
-# 	end
-
-# 	# Sylvester equation has unique solution when P and C have no common eigenvalues
-# 	vals, vecs = eigen(P)
-
-# 	# Could be dangerous infinite loop
-# 	if !isempty(intersect(vals, λ_c))
-# 		println("Eigenvalues intersect, generating new P matrix.")
-# 		return sample_P(λ_c)
-# 	else
-# 		return P
-# 	end
-
-# end
-
-# # Attempt to find a polytopic ROA via the SDP method
-#  function polytope_roa_sylvester(Aₓ, bₓ, C, fp; constraints=100)
-#  	# Put domain constraints in x̄ frame
-# 	Aₓ_ = Aₓ
-# 	bₓ_ = bₓ - Aₓ_*fp
-# 	Aₛ_ = Aₛ
-# 	bₛ_ = bₛ - Aₛ_*fp
-
-# 	# Sample P s.t. P .≥ 0 && P*1 ≤ 1
-# 	λ_c, vecs_c = eigen(C)
-# 	P = sample_P(λ_c, constraints)	
-
-# 	# Solve Sylvester equation PF + F(-C) = 0
-# 	F = sylvc(P, -C, zeros(constraints, size(C,2)))
-
-# 	# Grow/shrink polytope roa to fit within domain polytope
-
-
-# 	return  A_roa_, b_roa_ + A_roa_*fp # return constraints in the x frame
-#  end
-
-
-
-
-# # Find an i-step invariant set given a fixed point p
-# function i_step_invariance(fixed_point, max_steps)
-# 	for i in 0:max_steps
-# 		println("\n", i+1)
-# 		# load neural network
-# 		copies = i # copies = 0 is original network
-# 		model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
-# 		weights, net_dict = pendulum_net(model, copies)
-# 		state = get_state(fixed_point, weights)
-# 		num_neurons = sum([length(state[layer]) for layer in 1:length(state)])
-		
-# 		# get Cx+d, Ax≤b
-# 		C, d = local_map(state, weights)
-# 		println("opnorm(C'C): ", opnorm(C'C))
-# 		F = eigen(C)
-# 		println("eigen(C): ", F.values)
-# 		A, b, nothing, nothing, unique_nonzerow_indices = get_constraints(weights, state, num_neurons)
-# 		A, b, nothing, nothing, nothing = remove_redundant(A, b, [], [], unique_nonzerow_indices, [])
-
-# 		# get forward reachable set
-# 		Af, bf = affine_map(A, b, C, d)
-
-# 		# check if forward reachable set is a strict subset of Ax≤b
-# 		unique_nonzerow_indices = 1:(length(b) + length(bf)) # all indices unique & nonzero
-# 		A_, b_, nothing, nothing, nothing = remove_redundant(vcat(A, Af), vcat(b, bf), [], [], unique_nonzerow_indices, [])
-# 		if A_ == Af && b_ == bf
-# 			println(i+1, "-step invariant set found!")
-# 			return i, state, A_, b_
-# 		end
-# 	end
-# 	return nothing, nothing, nothing, nothing
-# end
-
 

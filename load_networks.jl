@@ -3,30 +3,17 @@ include("nnet.jl")
 
 
 # Evaluate network. Takes care of normalizing inputs and un-normalizing outputs
-function eval_net(input, weights, net_dict, copies::Int64; type="normal")
+function eval_net(input, weights, copies::Int64; type="normal")
 	copies == 0 ? (return input) : nothing
-	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
-	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
-	NN_out = vcat(Aᵢₙ*input + bᵢₙ, [1.])
-    for layer = 1:length(weights)-1
-        NN_out = max.(0, weights[layer]*NN_out)
-    end
-    output = Aₒᵤₜ*weights[end]*NN_out + bₒᵤₜ
-    type == "residual" ? output += input : nothing
-    return eval_net(output, weights, net_dict, copies-1)
-end
-
-# Evaluate network. Takes care of normalizing inputs and un-normalizing outputs
-function eval_net_no_normalization(input, weights, net_dict, copies::Int64)
-	copies == 0 ? (return input) : nothing
-	# @show input
 	NN_out = vcat(input, [1.])
     for layer = 1:length(weights)-1
         NN_out = max.(0, weights[layer]*NN_out)
     end
     output = weights[end]*NN_out
-    return eval_net(output, weights, net_dict, copies-1)
+    type == "residual" ? output += input : nothing
+    return eval_net(output, weights, copies-1)
 end
+
 
 bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,b]
 
@@ -78,108 +65,8 @@ function acas_net_nnet(a::Int64, b::Int64)
 	return nnet_load(filename)
 end
 
-
-# Load Pendulum Networks #
-function pendulum_net(filename::String, copies::Int64)
-	model = matread(filename)
-	num_layers = length(model["weights"])
-	layer_sizes = vcat(size(model["weights"][1], 2), [length(model["biases"][i]) for i in 1:num_layers])
-
-	# make net_dict
-	σᵢ = Float64.(Diagonal(vec(model["X_std"])))
-	μᵢ = Float64.(vec(model["X_mean"]))
-	σₒ = Float64.(Diagonal(vec(model["Y_std"])))
-	μₒ = Float64.(vec(model["Y_mean"]))
-	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
-	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
-
-	net_dict = Dict()
-	net_dict["num_layers"] = num_layers
-	net_dict["layer_sizes"] = layer_sizes
-	net_dict["input_size"] = layer_sizes[1]
-	net_dict["output_size"] = layer_sizes[end]
-	net_dict["input_norm_map"] = (Aᵢₙ, bᵢₙ)
-	net_dict["output_unnorm_map"] = (Aₒᵤₜ, bₒᵤₜ) 
-
-
-	w = Vector{Array{Float64,2}}(undef, num_layers)
-	for i in 1:(num_layers-1)
-		w[i] = vcat(hcat(model["weights"][i], vec(model["biases"][i])), reshape(zeros(1+layer_sizes[i]),1,:))
-		w[i][end,end] = 1
-	end
-	w[end] = hcat(model["weights"][end], vec(model["biases"][end]))
-	
-	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
-	merged_layers = [c*num_layers - (c-1) for c in 1:copies]
-	w_idx = 1
-	for k in 1:length(weights)
-		if k == 1
-			weights[k] = w[1]
-			w_idx += 1
-		elseif k == length(weights)
-			weights[k] = w[end]
-		elseif k in merged_layers
-			w̄ₒ = vcat(w[end], reshape(zeros(1+layer_sizes[end-1]),1,:))
-			w̄ₒ[end,end] = 1
-			Āₒ = vcat(hcat(Aₒᵤₜ, bₒᵤₜ), reshape(zeros(1+layer_sizes[end]),1,:))
-			Āₒ[end,end] = 1
-			Āᵢ = vcat(hcat(Aᵢₙ, bᵢₙ), reshape(zeros(1+layer_sizes[1]),1,:))
-			Āᵢ[end,end] = 1
-			
-			weights[k] = w[1]*Āᵢ*Āₒ*w̄ₒ
-			w_idx = 2
-		else
-			weights[k] = w[w_idx]
-			w_idx += 1
-		end
-	end
-
-	return weights, net_dict
-end
-
-
-
-# Load pytorch networks saved as numpy variables
-function pytorch_net(model, copies::Int64)
-	W = npzread(string("models/", model, "/weights.npz"))
-	params = npzread(string("models/", model, "/norm_params.npz"))
-
-	num_layers = Int(length(W)/2)
-	layer_sizes = params["layer_sizes"]
-
-	# make net_dict
-	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
-	μᵢ = Float64.(vec(params["X_mean"]))
-	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
-	μₒ = Float64.(vec(params["Y_mean"]))
-	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
-	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
-
-	net_dict = Dict()
-	net_dict["num_layers"] = num_layers
-	net_dict["layer_sizes"] = layer_sizes
-	net_dict["input_size"] = layer_sizes[1]
-	net_dict["output_size"] = layer_sizes[end]
-
-
-	w = Vector{Array{Float64,2}}(undef, num_layers)
-	weight = W[string("arr_", 0)]*Aᵢₙ
-	bias   = W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ
-	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
-	w[1][end,end] = 1
-	for i in 2:(num_layers-1)
-		weight = W[string("arr_", 2*(i-1))]
-		bias   = W[string("arr_", 2*(i-1)+1)]
-		w[i] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]),1,:))
-		w[i][end,end] = 1
-	end
-
-	weight = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
-	bias   = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ
-	w[end] = hcat(weight, vec(bias))
-
-
-	# chain together multiple networks
+# chain together multiple networks
+function chain_net(w, copies, num_layers, layer_sizes)
 	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
 	merged_layers = [c*num_layers - (c-1) for c in 1:copies]
 	w_idx = 1
@@ -200,7 +87,79 @@ function pytorch_net(model, copies::Int64)
 		end
 	end
 
-	return weights, net_dict
+	return weights
+end
+
+
+# Load Pendulum Networks #
+function pendulum_net(filename::String, copies::Int64)
+	model = matread(filename)
+	num_layers = length(model["weights"])
+	layer_sizes = vcat(size(model["weights"][1], 2), [length(model["biases"][i]) for i in 1:num_layers])
+
+	σᵢ = Float64.(Diagonal(vec(model["X_std"])))
+	μᵢ = Float64.(vec(model["X_mean"]))
+	σₒ = Float64.(Diagonal(vec(model["Y_std"])))
+	μₒ = Float64.(vec(model["Y_mean"]))
+	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
+	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
+
+	w = Vector{Array{Float64,2}}(undef, num_layers)
+	weight = model["weights"][1]*Aᵢₙ
+	bias   = model["biases"][1] + model["weights"][1]*bᵢₙ
+	w[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[i][end,end] = 1
+	for i in 2:(num_layers-1)
+		weight = model["weights"][i]
+		bias   = model["biases"][i]
+		w[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]),1,:))
+		w[i][end,end] = 1
+	end
+	weight = Aₒᵤₜ*model["weights"][end]
+	bias   = Aₒᵤₜ*model["biases"][end] + bₒᵤₜ
+	w[end] = hcat(weight, vec(bias))
+	
+	weights = chain_net(w, copies, num_layers, layer_sizes)
+
+	return weights
+end
+
+
+
+# Load pytorch networks saved as numpy variables
+function pytorch_net(model, copies::Int64)
+	W = npzread(string("models/", model, "/weights.npz"))
+	params = npzread(string("models/", model, "/norm_params.npz"))
+
+	num_layers = Int(length(W)/2)
+	layer_sizes = params["layer_sizes"]
+
+	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
+	μᵢ = Float64.(vec(params["X_mean"]))
+	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
+	μₒ = Float64.(vec(params["Y_mean"]))
+	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
+	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
+
+	w = Vector{Array{Float64,2}}(undef, num_layers)
+	weight = W[string("arr_", 0)]*Aᵢₙ
+	bias   = W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ
+	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[1][end,end] = 1
+	for i in 2:(num_layers-1)
+		weight = W[string("arr_", 2*(i-1))]
+		bias   = W[string("arr_", 2*(i-1)+1)]
+		w[i] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]),1,:))
+		w[i][end,end] = 1
+	end
+
+	weight = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
+	bias   = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ
+	w[end] = hcat(weight, vec(bias))
+
+	weights = chain_net(w, copies, num_layers, layer_sizes)
+
+	return weights
 end
 
 
@@ -217,7 +176,6 @@ function pytorch_mpc_net(model, copies::Int64)
 	num_layers = Int(length(W)/2)
 	layer_sizes = params["layer_sizes"]
 
-	# make net_dict
 	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
 	μᵢ = Float64.(vec(params["X_mean"]))
 	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
@@ -257,53 +215,7 @@ function pytorch_mpc_net(model, copies::Int64)
 	end
 	layer_sizes[end] = layer_sizes[1]
 
-	# Make net_dict
-	net_dict = Dict()
-	net_dict["num_layers"] = num_layers
-	net_dict["layer_sizes"] = layer_sizes
-	net_dict["input_size"] = layer_sizes[1]
-	net_dict["output_size"] = layer_sizes[end]
+	weights = chain_net(w, copies, num_layers, layer_sizes)
 
-	# chain together multiple networks
-	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
-	merged_layers = [c*num_layers - (c-1) for c in 1:copies]
-	w_idx = 1
-	for k in 1:length(weights)
-		if k == 1
-			weights[k] = w[1]
-			w_idx += 1
-		elseif k == length(weights)
-			weights[k] = w[end]
-		elseif k in merged_layers
-			w̄ₒ = vcat(w[end], reshape(zeros(1+layer_sizes[end-1]),1,:))
-			w̄ₒ[end,end] = 1
-			weights[k] = w[1]*w̄ₒ
-			w_idx = 2
-		else
-			weights[k] = w[w_idx]
-			w_idx += 1
-		end
-	end
-
-	return weights, net_dict
-end
-
-function vanderpol_loss(weights, net_dict)
-	X = npzread("models/vanderpol/X.npy")
-	Y = npzread("models/vanderpol/Y.npy")
-	params = npzread("models/vanderpol/norm_params.npz")
-	X_mean = vec(params["X_mean"])
-	X_std = vec(params["X_std"])
-	Y_mean = vec(params["Y_mean"])
-	Y_std = vec(params["Y_std"])
-
-	# X = (X - X_mean) / X_std
-	# Y = (Y - Y_mean) / Y_std
-	loss = 0.0
-	for i in 1:size(X, 1)
-		# @show (X[i,:] - X_mean)
-		# @show (X[i,:] - X_mean) ./ X_std
-		loss += norm((Y[i,:] - Y_mean) ./ Y_std - eval_net_no_normalization((X[i,:] - X_mean) ./ X_std, weights, net_dict, 1))^2
-	end
-	return loss / size(X, 1)
+	return weights
 end
