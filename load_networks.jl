@@ -95,7 +95,7 @@ end
 function pendulum_net(filename::String, copies::Int64)
 	model = matread(filename)
 	num_layers = length(model["weights"])
-	layer_sizes = vcat(size(model["weights"][1], 2), [length(model["biases"][i]) for i in 1:num_layers])
+	layer_sizes = vcat(size(model["weights"][1], 2), [length(vec(model["biases"][i])) for i in 1:num_layers])
 
 	σᵢ = Float64.(Diagonal(vec(model["X_std"])))
 	μᵢ = Float64.(vec(model["X_mean"]))
@@ -106,17 +106,17 @@ function pendulum_net(filename::String, copies::Int64)
 
 	w = Vector{Array{Float64,2}}(undef, num_layers)
 	weight = model["weights"][1]*Aᵢₙ
-	bias   = model["biases"][1] + model["weights"][1]*bᵢₙ
-	w[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
-	w[i][end,end] = 1
+	bias   = vec(model["biases"][1]) + model["weights"][1]*bᵢₙ
+	w[1]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[1][end,end] = 1
 	for i in 2:(num_layers-1)
 		weight = model["weights"][i]
-		bias   = model["biases"][i]
+		bias   = vec(model["biases"][i])
 		w[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]),1,:))
 		w[i][end,end] = 1
 	end
 	weight = Aₒᵤₜ*model["weights"][end]
-	bias   = Aₒᵤₜ*model["biases"][end] + bₒᵤₜ
+	bias   = Aₒᵤₜ*vec(model["biases"][end]) + bₒᵤₜ
 	w[end] = hcat(weight, vec(bias))
 	
 	weights = chain_net(w, copies, num_layers, layer_sizes)

@@ -5,8 +5,8 @@ include("reach.jl")
 function input_constraints_pendulum(weights, type::String)
 	# Each input specification is in the form Ax≤b
 	if type == "pendulum"
-		A = [1 0; -1 0; 0 1; 0 -1]
-		b = deg2rad.([90, 90, 90, 90])
+		A = [1. 0; -1 0; 0 1; 0 -1]
+		b = deg2rad.([90., 90, 90, 90])
 	elseif type == "box"
 		in_dim = size(weights[1],2) - 1
 		A_pos = Matrix{Float64}(I, in_dim, in_dim)
@@ -14,8 +14,8 @@ function input_constraints_pendulum(weights, type::String)
 		A = vcat(A_pos, A_neg)
 		b = 0.01*ones(2*in_dim)
 	elseif type == "hexagon"
-		A = [1 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
-		b = [5, 5, 5, 5, 8, 8, 8, 8]
+		A = [1. 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
+		b = [5., 5, 5, 5, 8, 8, 8, 8]
 	else
 		error("Invalid input constraint specification.")
 	end
@@ -29,8 +29,8 @@ function output_constraints_pendulum(weights, type::String)
 	# The raw network outputs are unnormalized: yₒᵤₜ = Aₒᵤₜy + bₒᵤₜ
 	# Thus the output constraints for raw network outputs are: A*Aₒᵤₜ*y ≤ b - A*bₒᵤₜ
 	if type == "origin"
-		A = [1 0; -1 0; 0 1; 0 -1]
-		b = deg2rad.([5, 5, 2, 2])
+		A = [1. 0; -1 0; 0 1; 0 -1]
+		b = deg2rad.([5., 5, 2, 2])
  	else 
  		error("Invalid input constraint specification.")
  	end
@@ -68,13 +68,13 @@ Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
 
 # Run algorithm
 @time begin
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
 end
 @show length(state2input)
 
 # Plot all regions #
 plt_in1  = plot_hrep_pendulum(state2input)
-plt_in2  = plot_hrep_pendulum(state2backward[1])
+# plt_in2  = plot_hrep_pendulum(state2backward[1])
 plt_out = plot_hrep_pendulum(state2output)
 
 

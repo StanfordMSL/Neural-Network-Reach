@@ -525,8 +525,9 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 
 	# Initialize algorithm #
-	fp == [] ? input = get_input(Aᵢ, bᵢ) : input = fp
-	input = [1,1]
+	fp == [] ? input = get_input(Aᵢ, bᵢ) : input = fp # this may fail if initialized on the boundary of a cell
+	# check whether input is in interior of cell. If so, find a new input.
+	input = randn(2)
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)
