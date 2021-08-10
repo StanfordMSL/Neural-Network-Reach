@@ -29,10 +29,28 @@ function normalize_row(row::Vector{Float64})
 end
 
 # Returns the algorithm initialization point given task and input space constraints
-function get_input(Aᵢ, bᵢ)
-	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])	
+function get_input(Aᵢ, bᵢ, weights)
+	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])
+	while !interior_input(input, weights)
+		input += 1e-6*randn(size(Aᵢ,2))
+	end
 	return input
 end
+
+# checks whether input is on cell boundary
+# an input is on a cell boundary if any postactivation variable z is zero
+function interior_input(input, weights)
+	NN_out = vcat(input, [1.])
+    for layer = 1:length(weights)-1
+    	ẑ = weights[layer]*NN_out
+    	for i in 1:length(ẑ)
+    		isapprox(ẑ[i], 0.0, atol=ϵ) ? (return false) : nothing
+    	end
+        NN_out = max.(0, ẑ)
+    end
+    return true
+end
+
 
 # Given input point, perform forward pass to get ap.
 function get_ap(input, weights)
@@ -525,9 +543,9 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 
 	# Initialize algorithm #
-	fp == [] ? input = get_input(Aᵢ, bᵢ) : input = fp # this may fail if initialized on the boundary of a cell
+	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
 	# check whether input is in interior of cell. If so, find a new input.
-	input = randn(2)
+	# input = randn(2) # need to test that input is not on cell boundary
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)

@@ -3,7 +3,7 @@ using LinearAlgebra, MatrixEquations, JuMP, Convex, SCS, COSMO, GLPK, Distributi
 # Return true if x ∈ {x | Ax ≤ b}, otherwise return false
 function in_polytope(x, A, b)
 	for i in 1:length(b)
-		A[i,:]⋅x > b[i] ? (return false) : nothing
+		A[i,:]⋅x > b[i] + ϵ ? (return false) : nothing
 	end
 	return true
 end
@@ -320,7 +320,7 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 		Aₒ, bₒ = output_constraints_vanderpol(weights, "origin")
 		println("Input set: van der Pol box")
 	elseif dynamics == "mpc"
-		weights = pytorch_net("mpc", 1)
+		weights = pytorch_mpc_net("mpc", 1)
 		Aᵢ, bᵢ = input_constraints_mpc(weights, "box")
 		Aₒ, bₒ = output_constraints_mpc(weights, "origin")
 		println("Input set: MPC box")
@@ -354,9 +354,9 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 	elseif dynamics == "vanderpol"
 		weights_chain = pytorch_net("vanderpol", num_steps)
 	elseif dynamics == "mpc"
-		weights_chain = pytorch_net("mpc", num_steps)
+		weights_chain = pytorch_mpc_net("mpc", num_steps)
 	end
-	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [A_roa], [b_roa], back=true, connected=true)
+	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, back=true, connected=true)
 	
 	if dynamics == "pendulum"
 		plt_in2  = plot_hrep_pendulum(state2backward_chain[1])

@@ -165,6 +165,7 @@ end
 
 
 # Load pytorch networks that are controllers for linear MPC models
+# I apply the dynamics A matrix in the first layer to try to avoid hyperplanes through the origin
 function pytorch_mpc_net(model, copies::Int64)
 	W = npzread(string("models/", model, "/weights.npz"))
 	params = npzread(string("models/", model, "/norm_params.npz"))
@@ -186,6 +187,7 @@ function pytorch_mpc_net(model, copies::Int64)
 	# make identity weights
 	sze = layer_sizes[1]
 	II = Matrix{Float64}(I, sze, sze)
+	# w_I1 = [A; -A]
 	w_I1 = [II; -II]
 	w_Im = [II -II; -II II]
 	b_I = zeros(2*sze)
@@ -205,6 +207,7 @@ function pytorch_mpc_net(model, copies::Int64)
 	end
 	
 	weight = B*Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
+	# weight = hcat(weight, [II -II])
 	weight = hcat(weight, [A -A])
 	bias   = B*(Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ)
 	w[end] = hcat(weight, vec(bias))
