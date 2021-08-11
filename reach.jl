@@ -31,8 +31,14 @@ end
 # Returns the algorithm initialization point given task and input space constraints
 function get_input(Aᵢ, bᵢ, weights)
 	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])
+	println("Here 2.1")
+	i = 1
 	while !interior_input(input, weights)
 		input += 1e-6*randn(size(Aᵢ,2))
+		if i == 100
+			error("Couldn't generate interior input.")
+		end
+		i += 1
 	end
 	return input
 end
@@ -541,7 +547,6 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
-
 	# Initialize algorithm #
 	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
 	# check whether input is in interior of cell. If so, find a new input.

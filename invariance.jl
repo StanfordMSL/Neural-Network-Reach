@@ -369,6 +369,6 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-5, 5), ylims=(-5, 5))
 	end
 
-	return A_roa, b_roa, state2backward_chain[1], plt_in2
+	return A_roa, b_roa, fp, state2backward_chain[1], plt_in2
 end
 

@@ -118,7 +118,7 @@ plt_in1  = plot_hrep_mpc(state2input)
 # @show fp
 
 
-# A_roa, b_roa, state2backward_chain, plt_in2 = find_roa("mpc", 10, 2) # (dynamics, num_constraints, num_steps)
+# A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("mpc", 10, 2) # (dynamics, num_constraints, num_steps)
 # 10 steps is ~35k polytopes with ~300 polytopes in the BRS
 # 15 steps is 88,500 polytopes with 895 polytopes in the BRS
 # algorithm does ~1000 polytopes per minute.

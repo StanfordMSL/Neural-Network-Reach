@@ -107,9 +107,8 @@ if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
 
 # import data, normalize, split, and construct dataset classes
-# van der Pol
-X = numpy.load("models/" + dynamics + "/X.npy")
-Y = numpy.load("models/" + dynamics + "/Y.npy")
+X = numpy.load("models/" + dynamics + "/X5.npy")
+Y = numpy.load("models/" + dynamics + "/Y5.npy")
 
 X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
 Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
@@ -126,14 +125,14 @@ print("Using {} device".format(device))
 
 
 # Create data loaders.
-batch_size = 20
+batch_size = 40
 train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
 layer_sizes = numpy.array([in_dim, 10, 10, out_dim])
 model = FFReLUNet(layer_sizes).to(device)
 loss_fn = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-3)
 print("\n", model)
 
 # Train

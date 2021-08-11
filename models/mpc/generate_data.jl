@@ -63,8 +63,8 @@ function gen_data(n, N)
 		end
 	end
 
-	npzwrite("models/mpc/X.npy", X)
-	npzwrite("models/mpc/Y.npy", Y)
+	npzwrite(string("models/mpc/X", N, ".npy"), X)
+	npzwrite(string("models/mpc/Y", N, ".npy"), Y)
 	return nothing
 end
 

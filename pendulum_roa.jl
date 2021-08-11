@@ -83,7 +83,7 @@ end
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, state2backward_chain[1], plt_in2 = find_roa("pendulum", 100, 5)
+A_roa, b_roa, fp, state2backward_chain[1], plt_in2 = find_roa("pendulum", 100, 5)
 # matwrite("models/Pendulum/pendulum_seed.mat", Dict("A_roa" => A_roa, "b_roa" => b_roa))
 
 # Create gif of backward reachable set
