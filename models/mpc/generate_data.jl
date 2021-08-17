@@ -38,8 +38,46 @@ function update(S, N)
 	else
 		return [100.] # kind of a hack
 	end
+end
 
-	
+# Dynamics from Pappas paper
+# N = 15
+function update_pappas(S, N)
+	ϵ = 0.1
+	A = [1. ϵ*1.; 0. 1.]
+	B = [ϵ^2 / 2., ϵ]
+	Qₓ, Qᵤ = [1. 0.; 0. 1.], ones(1,1)
+
+	# solve QP for u
+	u = Variable(1, N)
+	x = Variable(2, N+1)
+	problem = minimize(sum(quadform(x[:,i+1], Qₓ'*Qₓ) + quadform(u[:,i], Qᵤ'*Qᵤ) for i in 1:N))
+	# State and Control limits
+	for i in 1:N
+		problem.constraints += abs(x[1,i]) ≤ 6
+		problem.constraints += abs(x[2,i]) ≤ 1
+		problem.constraints += abs(u[1,i]) ≤ 2
+	end
+	problem.constraints += abs(x[1,N+1]) ≤ 6
+	problem.constraints += abs(x[2,N+1]) ≤ 1
+
+	# Dynamic Feasibility
+	problem.constraints += x[:,1] == S
+	for i in 2:N+1
+		problem.constraints += x[:,i] == A*x[:,i-1] + B*u[:,i-1]
+	end
+
+	solve!(problem, ECOS.Optimizer; silent_solver=true)
+
+	if problem.status == MathOptInterface.OPTIMAL
+		if N == 1
+			return [evaluate(u)]
+		else
+			return evaluate(u[:,1])
+		end
+	else
+		return [100.] # kind of a hack
+	end
 end
 
 
@@ -52,8 +90,9 @@ function gen_data(n, N)
 	Y = Matrix{Float64}(undef, n, 1)
 
 	for i in 1:n
+		println("i: ", i)
 		while true
-			x = [bound_r(-5.0, 5.0), bound_r(-5.0, 5.0)]
+			x = [bound_r(-6.0, 6.0), bound_r(-1.0, 1.0)]
 			y = update(x, N)
 			if y != [100.] # hacky
 				X[i,:] = x
@@ -63,8 +102,8 @@ function gen_data(n, N)
 		end
 	end
 
-	npzwrite(string("models/mpc/X", N, ".npy"), X)
-	npzwrite(string("models/mpc/Y", N, ".npy"), Y)
+	npzwrite(string("models/mpc/X", N, "pappas.npy"), X)
+	npzwrite(string("models/mpc/Y", N, "pappas.npy"), Y)
 	return nothing
 end
 

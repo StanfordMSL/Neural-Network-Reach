@@ -31,7 +31,6 @@ end
 # Returns the algorithm initialization point given task and input space constraints
 function get_input(Aᵢ, bᵢ, weights)
 	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])
-	println("Here 2.1")
 	i = 1
 	while !interior_input(input, weights)
 		input += 1e-6*randn(size(Aᵢ,2))

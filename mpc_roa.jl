@@ -110,12 +110,12 @@ plt_in1  = plot_hrep_mpc(state2input)
 
 
 
-# homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
-# println("PWA function is a homeomorphism: ", homeomorph)
+homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
+println("PWA function is a homeomorphism: ", homeomorph)
 
-# fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
-# fp = fixed_points[1]
-# @show fp
+fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
+fp = fixed_points[1]
+@show fp
 
 
 # A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("mpc", 10, 2) # (dynamics, num_constraints, num_steps)
