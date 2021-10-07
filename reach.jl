@@ -549,7 +549,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	# Initialize algorithm #
 	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
 	# check whether input is in interior of cell. If so, find a new input.
-	# input = randn(2) # need to test that input is not on cell boundary
+	# input = 3*randn(2) # need to test that input is not on cell boundary
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)

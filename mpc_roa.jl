@@ -84,7 +84,7 @@ end
 # ⋅ compute invariant polytopes around the fixed points
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
-copies = 1 # copies = 1 is original network
+copies = 10 # copies = 1 is original network
 
 weights = pytorch_mpc_net("mpc", copies)
 # weights = pytorch_net("mpc", copies)
@@ -97,8 +97,8 @@ Aₒ, bₒ = output_constraints_mpc(weights, "origin")
 
 # Run algorithm
 @time begin
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
 end
 @show length(state2input)
 # @show length(state2backward[1])
@@ -106,19 +106,19 @@ end
 
 # Plot all regions #
 plt_in1  = plot_hrep_mpc(state2input)
-# plt_in2  = plot_hrep_mpc(state2backward[1])
+plt_in2  = plot_hrep_mpc(state2backward[1])
 
 
 
-homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
-println("PWA function is a homeomorphism: ", homeomorph)
+# homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
+# println("PWA function is a homeomorphism: ", homeomorph)
 
-fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
-fp = fixed_points[1]
-@show fp
+# fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
+# fp = fixed_points[1]
+# @show fp
 
 
-# A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("mpc", 10, 2) # (dynamics, num_constraints, num_steps)
+# A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("mpc", 20, 2) # (dynamics, num_constraints, num_steps)
 # 10 steps is ~35k polytopes with ~300 polytopes in the BRS
 # 15 steps is 88,500 polytopes with 895 polytopes in the BRS
 # algorithm does ~1000 polytopes per minute.

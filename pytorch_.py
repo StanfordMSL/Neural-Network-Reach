@@ -107,8 +107,11 @@ if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
 
 # import data, normalize, split, and construct dataset classes
-X = numpy.load("models/" + dynamics + "/X15pappas.npy")
-Y = numpy.load("models/" + dynamics + "/Y15pappas.npy")
+# X = numpy.load("models/" + dynamics + "/X15pappas.npy")
+# Y = numpy.load("models/" + dynamics + "/Y15pappas.npy")
+
+X = numpy.load("models/" + dynamics + "/X.npy")
+Y = numpy.load("models/" + dynamics + "/Y.npy")
 
 X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
 Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
@@ -125,18 +128,18 @@ print("Using {} device".format(device))
 
 
 # Create data loaders.
-batch_size = 20
+batch_size = 50
 train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
 layer_sizes = numpy.array([in_dim, 8, 8, out_dim])
 model = FFReLUNet(layer_sizes).to(device)
 loss_fn = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-6)
 print("\n", model)
 
 # Train
-epochs = 5
+epochs = 50
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
