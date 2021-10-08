@@ -100,18 +100,18 @@ def test(dataloader, model, loss_fn):
 
 
 
-# Choose dynamics: "vanderpol", "mpc"
+# Choose dynamics: "vanderpol", "mpc", "taxinet_dyn"
 dynamics = "mpc"
 
 if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
 
 # import data, normalize, split, and construct dataset classes
-# X = numpy.load("models/" + dynamics + "/X15pappas.npy")
-# Y = numpy.load("models/" + dynamics + "/Y15pappas.npy")
+X = numpy.load("models/taxinet/Y_image.npy")
+Y = numpy.load("models/taxinet/X_image.npy")
 
-X = numpy.load("models/" + dynamics + "/X.npy")
-Y = numpy.load("models/" + dynamics + "/Y.npy")
+# X = numpy.load("models/" + dynamics + "/X.npy")
+# Y = numpy.load("models/" + dynamics + "/Y.npy")
 
 X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
 Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
@@ -123,7 +123,7 @@ split = int(0.90 * N)
 training_data = Dataset(X[:split, :], Y[:split, :])
 testing_data = Dataset( X[split:, :], Y[split:, :])
 
-print("Nonlinear regression for input dim = " + str(in_dim) + ", output dim = " + str(out_dim) + ", with " + str(split) + " samples.")
+print("\n\nNonlinear regression for input dim = " + str(in_dim) + ", output dim = " + str(out_dim) + ", with " + str(split) + " samples.")
 print("Using {} device".format(device))
 
 
@@ -132,14 +132,14 @@ batch_size = 50
 train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
-layer_sizes = numpy.array([in_dim, 8, 8, out_dim])
+layer_sizes = numpy.array([in_dim, 128, 128, out_dim])
 model = FFReLUNet(layer_sizes).to(device)
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-6)
 print("\n", model)
 
 # Train
-epochs = 50
+epochs = 20
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
@@ -158,24 +158,28 @@ for name, param in model.named_parameters():
 
     
 # save weights and normalization parameters
-numpy.savez("models/" + dynamics + "/weights.npz", *weights)
-numpy.savez("models/" + dynamics + "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+numpy.savez("models/taxinet/weights_state2image_medium.npz", *weights)
+numpy.savez("models/taxinet/norm_params_state2image_medium.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
-model.eval()
-inpt = [0.5, 0.3]
-inpt_norm = torch.tensor(([inpt] - X_mean) / X_std, dtype=torch.float32).to(device)
-outpt_norm = model.forward(inpt_norm)
-outpt = (Y_std * outpt_norm.detach().numpy()) + Y_mean
+# numpy.savez("models/" + dynamics + "/weights.npz", *weights)
+# numpy.savez("models/" + dynamics + "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
-print("\nX_mean: ", X_mean)
-print("X_std: ", X_std)
-print("Y_mean: ", Y_mean)
-print("Y_std: ", Y_std)
+# For validation
+# model.eval()
+# inpt = [0.5, 0.3]
+# inpt_norm = torch.tensor(([inpt] - X_mean) / X_std, dtype=torch.float32).to(device)
+# outpt_norm = model.forward(inpt_norm)
+# outpt = (Y_std * outpt_norm.detach().numpy()) + Y_mean
 
-print("Validation Input: ", inpt)
-print("Normalized Input: ", inpt_norm)
-print("Normalized Output: ",outpt_norm)
-print("Unnormalized Output: ", outpt)
+# print("\nX_mean: ", X_mean)
+# print("X_std: ", X_std)
+# print("Y_mean: ", Y_mean)
+# print("Y_std: ", Y_std)
+
+# print("Validation Input: ", inpt)
+# print("Normalized Input: ", inpt_norm)
+# print("Normalized Output: ",outpt_norm)
+# print("Unnormalized Output: ", outpt)
 
 
 

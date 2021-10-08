@@ -16,10 +16,10 @@ end
 
 ```generate input data```
 function gen_data(n::Int)
-	X, Y = Matrix{Float64}(undef, 2, n), Matrix{Float64}(undef, 2, n)
+	X, Y = Matrix{Float64}(undef, n, 2), Matrix{Float64}(undef, n, 2)
 	for i in 1:n
-		X[:,i] = [bound_r(-11.,11.), bound_r(-30.,30.)] # input bounds
-		Y[:,i] = dynamics(X[:,i])
+		X[i,:] = [bound_r(-11.,11.), bound_r(-30.,30.)] # input bounds
+		Y[i,:] = dynamics(X[i,:])
 	end
 	npzwrite("models/taxinet/X_dynamics.npy", X)
 	npzwrite("models/taxinet/Y_dynamics.npy", Y)
