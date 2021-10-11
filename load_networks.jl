@@ -163,6 +163,43 @@ function pytorch_net(model, copies::Int64)
 end
 
 
+# Load pytorch networks saved as numpy variables
+function pytorch_net_taxi(weights, params)
+	W = npzread(weights)
+	params = npzread(params)
+
+	num_layers = Int(length(W)/2)
+	layer_sizes = params["layer_sizes"]
+
+	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
+	μᵢ = Float64.(vec(params["X_mean"]))
+	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
+	μₒ = Float64.(vec(params["Y_mean"]))
+	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
+	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
+
+	w = Vector{Array{Float64,2}}(undef, num_layers)
+	weight = W[string("arr_", 0)]*Aᵢₙ
+	bias   = W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ
+	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[1][end,end] = 1
+	for i in 2:(num_layers-1)
+		weight = W[string("arr_", 2*(i-1))]
+		bias   = W[string("arr_", 2*(i-1)+1)]
+		w[i] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]),1,:))
+		w[i][end,end] = 1
+	end
+
+	weight = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
+	bias   = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ
+	w[end] = hcat(weight, vec(bias))
+
+	weights = chain_net(w, copies, num_layers, layer_sizes)
+
+	return weights
+end
+
+
 
 # Load pytorch networks that are controllers for linear MPC models
 # I apply the dynamics A matrix in the first layer to try to avoid hyperplanes through the origin
@@ -221,4 +258,14 @@ function pytorch_mpc_net(model, copies::Int64)
 	weights = chain_net(w, copies, num_layers, layer_sizes)
 
 	return weights
+end
+
+
+
+function taxinet_cl()
+	state2image = nnet_load("/models/taxinet/full_mlp_supervised_2input.nnet")
+	image2state = nnet_load("/models/taxinet/TinyTaxiNet.nnet")
+	state2state′ = pytorch_net_taxi("/models/taxinet/weights_dynamics_small.npz", "/models/taxinet/norm_params_dynamics_small.npz")
+
+	weights_cl = nothing 
 end
