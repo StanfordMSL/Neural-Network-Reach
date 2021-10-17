@@ -87,8 +87,6 @@ end
 copies = 10 # copies = 1 is original network
 
 weights = pytorch_mpc_net("mpc", copies)
-# weights = pytorch_net("mpc", copies)
-
 
 Aᵢ, bᵢ = input_constraints_mpc(weights, "box")
 Aₒ, bₒ = output_constraints_mpc(weights, "origin")

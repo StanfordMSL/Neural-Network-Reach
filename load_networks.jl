@@ -2,35 +2,46 @@ using MAT, NPZ, LinearAlgebra
 include("nnet.jl")
 
 
-# Evaluate network. Takes care of normalizing inputs and un-normalizing outputs
-function eval_net(input, weights, copies::Int64; type="normal")
+```evaluate the network given input, weights, and how many copies chained together```
+function eval_net(input, weights, copies::Int64)
 	copies == 0 ? (return input) : nothing
 	NN_out = vcat(input, [1.])
     for layer = 1:length(weights)-1
         NN_out = max.(0, weights[layer]*NN_out)
     end
     output = weights[end]*NN_out
-    type == "residual" ? output += input : nothing
     return eval_net(output, weights, copies-1)
 end
 
 
-bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,b]
+```Generates a uniformly random number on [a,b]```
+bound_r(a,b) = (b-a)*(rand()-1) + b
 
-# NN with input in, output out, hidden dim hdim, and hidden layers layers.
+
+```Generate random neural network with Kaiming initialization```
 function random_net(in_d, out_d, hdim, layers)
 	Weights = Vector{Array{Float64,2}}(undef,layers)
-	Weights[1] = sqrt(2/515)*(2*rand(hdim, in_d) - rand(hdim, in_d))
+	r_weight = sqrt(2/515)*(2*rand(hdim, in_d) - rand(hdim, in_d))
+	r_bias   = sqrt(2/515)*(2*rand(hdim, 1) - rand(hdim, 1))
+	Weights[1] = vcat(hcat(r_weight, r_bias), reshape(zeros(1+in_d),1,:))
+	Weights[1][end,end] = 1
 	for i in 2:layers-1
-		Weights[i] = sqrt(2/515)*(2*rand(hdim,hdim) - rand(hdim,hdim)) # Kaiming Initialization
+		r_weight = sqrt(2/515)*(2*rand(hdim, hdim) - rand(hdim, hdim))
+		r_bias   = sqrt(2/515)*(2*rand(hdim, 1) - rand(hdim, 1))
+		Weights[i] = vcat(hcat(r_weight, r_bias), reshape(zeros(1+hdim),1,:))
+		Weights[i][end,end] = 1
 	end
-	Weights[end] = sqrt(2/515)*(2*rand(out_d, hdim) - rand(out_d, hdim))
+	r_weight = sqrt(2/515)*(2*rand(out_d, hdim) - rand(out_d, hdim))
+	r_bias   = sqrt(2/515)*(2*rand(out_d, 1) - rand(out_d, 1))
+	Weights[end] = hcat(r_weight, r_bias)
 	return Weights
 end
 
 
-# Load nnet network #
-# filename = "ACASXU_experimental_v2a_1_1.nnet"
+``` 
+Load nnet network 
+ex: filename = "ACASXU_experimental_v2a_1_1.nnet" 
+```
 function nnet_load(filename)
 	nnet = NNet(filename)
 	weights = Vector{Array{Float64,2}}(undef, nnet.numLayers)
@@ -59,13 +70,14 @@ function nnet_load(filename)
 end
 
 
-# Load ACAS Networks #
+``` Load ACAS Networks ```
 function acas_net_nnet(a::Int64, b::Int64)
 	filename = string("models/ACAS_nnet/ACASXU_experimental_v2a_", a, "_", b, ".nnet")
 	return nnet_load(filename)
 end
 
-# chain together multiple networks
+
+``` chain together multiple networks ```
 function chain_net(w, copies, num_layers, layer_sizes)
 	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
 	merged_layers = [c*num_layers - (c-1) for c in 1:copies]
@@ -86,12 +98,11 @@ function chain_net(w, copies, num_layers, layer_sizes)
 			w_idx += 1
 		end
 	end
-
 	return weights
 end
 
 
-# Load Pendulum Networks #
+``` load pendulum network with normalization ```
 function pendulum_net(filename::String, copies::Int64)
 	model = matread(filename)
 	num_layers = length(model["weights"])
@@ -125,8 +136,8 @@ function pendulum_net(filename::String, copies::Int64)
 end
 
 
-
-# Load pytorch networks saved as numpy variables
+## CHANGE THIS ##
+``` Load pytorch networks saved as numpy variables ```
 function pytorch_net(model, copies::Int64)
 	W = npzread(string("models/", model, "/weights.npz"))
 	params = npzread(string("models/", model, "/norm_params.npz"))
@@ -163,7 +174,7 @@ function pytorch_net(model, copies::Int64)
 end
 
 
-# Load pytorch networks saved as numpy variables
+``` Load pytorch networks saved as numpy variables ```
 function pytorch_net_taxi(weights, params)
 	W = npzread(weights)
 	params = npzread(params)
@@ -200,9 +211,10 @@ function pytorch_net_taxi(weights, params)
 end
 
 
-
-# Load pytorch networks that are controllers for linear MPC models
-# I apply the dynamics A matrix in the first layer to try to avoid hyperplanes through the origin
+```
+Load pytorch networks that are controllers for linear MPC models
+I apply the dynamics A matrix in the first layer to try to avoid hyperplanes through the origin
+```
 function pytorch_mpc_net(model, copies::Int64)
 	W = npzread(string("models/", model, "/weights.npz"))
 	params = npzread(string("models/", model, "/norm_params.npz"))
@@ -256,12 +268,11 @@ function pytorch_mpc_net(model, copies::Int64)
 	layer_sizes[end] = layer_sizes[1]
 
 	weights = chain_net(w, copies, num_layers, layer_sizes)
-
 	return weights
 end
 
 
-
+``` load in all taxinet networks to make closed-loop network ```
 function taxinet_cl()
 	state2image = nnet_load("/models/taxinet/full_mlp_supervised_2input.nnet")
 	image2state = nnet_load("/models/taxinet/TinyTaxiNet.nnet")
