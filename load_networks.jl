@@ -40,33 +40,34 @@ end
 
 ``` 
 Load nnet network 
-ex: filename = "ACASXU_experimental_v2a_1_1.nnet" 
+ex: filename = "models/ACAS_nnet/ACASXU_experimental_v2a_1_1.nnet" 
 ```
 function nnet_load(filename)
 	nnet = NNet(filename)
-	weights = Vector{Array{Float64,2}}(undef, nnet.numLayers)
-	for i in 1:(nnet.numLayers-1)
-		weights[i] = vcat(hcat(nnet.weights[i], nnet.biases[i]), reshape(zeros(1+nnet.layerSizes[i]),1,:))
-		weights[i][end,end] = 1
-	end
-	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
-	weights[end] = hcat(nnet.weights[end], nnet.biases[end])
 
-	# make net_dict
 	σᵢ = Diagonal(nnet.ranges[1:end-1])
 	μᵢ = nnet.means[1:end-1]
 	σₒ = nnet.ranges[end]*Matrix{Float64}(I, nnet.inputSize, nnet.inputSize)
 	μₒ = nnet.means[end]*ones(nnet.outputSize)
+	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
+	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
 
-	net_dict = Dict()
-	net_dict["num_layers"] = nnet.numLayers
-	net_dict["layer_sizes"] = nnet.layerSizes
-	net_dict["input_size"] = nnet.inputSize 
-	net_dict["output_size"] = nnet.outputSize
-	net_dict["input_norm_map"] = (inv(σᵢ), -inv(σᵢ)*μᵢ)
-	net_dict["output_unnorm_map"] = (σₒ, μₒ) 
-
-	return weights, nnet, net_dict
+	weights = Vector{Array{Float64,2}}(undef, nnet.numLayers)
+	weight = nnet.weights[1]*Aᵢₙ
+	bias   = vec(nnet.biases[1]) + nnet.weights[1]*bᵢₙ
+	weights[1]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+nnet.layerSizes[1]),1,:))
+	weights[1][end,end] = 1
+	for i in 2:(nnet.numLayers-1)
+		weight = nnet.weights[i]
+		bias   = vec(nnet.biases[i])
+		weights[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+nnet.layerSizes[i]),1,:))
+		weights[i][end,end] = 1
+	end
+	# last layer weight shouldn't carry forward the bias term. i.e. augmented but with last row removed
+	weight = Aₒᵤₜ*nnet.weights[end]
+	bias   = Aₒᵤₜ*vec(nnet.biases[end]) + bₒᵤₜ
+	weights[end] = hcat(weight, vec(bias))
+	return weights
 end
 
 
