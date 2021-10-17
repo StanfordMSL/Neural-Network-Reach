@@ -308,14 +308,14 @@ end
 
 
 # Given a NN model, number of seed polytope ROA constraints, and number of backward reachability steps, compute ROA
-function find_roa(dynamics::String, num_constraints, num_steps)
+function find_roa(dynamics::String, nn_weights, num_constraints, num_steps; nn_params="")
 	if dynamics == "pendulum"
-		weights = pendulum_net("models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat", 1)
+		weights = pendulum_net(nn_file, 1)
 		Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum")
 		Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
 		println("Input set: pendulum")
 	elseif dynamics == "vanderpol"
-		weights = pytorch_net("vanderpol", 1)
+		weights = pytorch_net(nn_weights, nn_params, 1)
 		Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box")
 		Aₒ, bₒ = output_constraints_vanderpol(weights, "origin")
 		println("Input set: van der Pol box")
@@ -352,7 +352,7 @@ function find_roa(dynamics::String, num_constraints, num_steps)
 	if dynamics == "pendulum"
 		weights_chain = pendulum_net(model, num_steps)
 	elseif dynamics == "vanderpol"
-		weights_chain = pytorch_net("vanderpol", num_steps)
+		weights_chain = pytorch_net(nn_weights, nn_params, num_steps)
 	elseif dynamics == "mpc"
 		weights_chain = pytorch_mpc_net("mpc", num_steps)
 	end

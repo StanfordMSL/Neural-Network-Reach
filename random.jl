@@ -36,7 +36,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-weights = random_net(2, 2, 50, 5) # (in_d, out_d, hdim, layers)
+weights = random_net(2, 2, 20, 5) # (in_d, out_d, hdim, layers)
 Aᵢ, bᵢ = input_constraints_random(weights, "hexagon")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()

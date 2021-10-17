@@ -8,7 +8,7 @@ function input_constraints_pendulum(weights, type::String)
 	# The network takes normalized inputs: xₙ = Aᵢₙx + bᵢₙ
 	# Thus the input constraints for raw network inputs are: A*inv(Aᵢₙ)x ≤ b + A*inv(Aᵢₙ)*bᵢₙ
 	if type == "pendulum"
-		A = [1 0; -1 0; 0 1; 0 -1]
+		A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
 		b = deg2rad.([90, 90, 90, 90])
 	elseif type == "box"
 		in_dim = size(weights[1],2) - 1
@@ -17,8 +17,8 @@ function input_constraints_pendulum(weights, type::String)
 		A = vcat(A_pos, A_neg)
 		b = 0.01*ones(2*in_dim)
 	elseif type == "hexagon"
-		A = [1 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
-		b = [5, 5, 5, 5, 8, 8, 8, 8]
+		A = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
+		b = [5., 5., 5., 5., 8., 8., 8., 8.]
 	else
 		error("Invalid input constraint specification.")
 	end
@@ -29,7 +29,7 @@ end
 # Returns H-rep of various output sets
 function output_constraints_pendulum(weights, type::String)
 	if type == "origin"
-		A = [1 0; -1 0; 0 1; 0 -1]
+		A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
 		b = deg2rad.([5, 5, 2, 2])
  	else 
  		error("Invalid input constraint specification.")
@@ -83,8 +83,11 @@ end
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, fp, state2backward_chain[1], plt_in2 = find_roa("pendulum", 100, 5)
+nn_file = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
+A_roa, b_roa, fp, state2backward_chain[1], plt_in2 = find_roa("pendulum", nn_file, 50, 5)
 # matwrite("models/Pendulum/pendulum_seed.mat", Dict("A_roa" => A_roa, "b_roa" => b_roa))
+
+@show plt_in2
 
 # Create gif of backward reachable set
 # BRS_gif(model, Aᵢ, bᵢ, A_roa, b_roa, 5)

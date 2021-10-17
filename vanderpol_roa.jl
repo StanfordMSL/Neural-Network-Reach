@@ -60,10 +60,10 @@ end
 
 
 # make gif of backwards reachable set over time
-function BRS_gif(model, Aᵢ, bᵢ, Aₛ, bₛ, steps)
+function BRS_gif(nn_weights, nn_params, Aᵢ, bᵢ, Aₛ, bₛ, steps)
 	plt = plot(HPolytope(constraints_list(Aₛ, bₛ)), xlims=(-2.5, 2.5), ylims=(-3, 3))
 	anim = @animate for Step in 2:steps
-		weights = pytorch_net("vanderpol", Step)
+		weights = pytorch_net(nn_weights, nn_params, Step)
 		state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₛ], [bₛ], reach=false, back=true, verification=false)
     	plt = plot_hrep_pendulum(state2backward[1], type="gif")
 	end
@@ -84,25 +84,27 @@ end
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
 copies = 1 # copies = 1 is original network
-weights = pytorch_net("vanderpol", copies)
+nn_weights = "models/vanderpol/weights.npz"
+nn_params = "models/vanderpol/norm_params.npz"
+weights = pytorch_net(nn_weights, nn_params, copies)
 
 
-Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box")
-Aₒ, bₒ = output_constraints_vanderpol(weights, "origin")
-A_roa = Matrix{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["A_roa"])
-b_roa = Vector{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["b_roa"])
+# Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box")
+# Aₒ, bₒ = output_constraints_vanderpol(weights, "origin")
+# A_roa = Matrix{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["A_roa"])
+# b_roa = Vector{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["b_roa"])
 
 # Run algorithm
-@time begin
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa])
+# @time begin
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa])
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
-end
-@show length(state2input)
+# end
+# @show length(state2input)
 # @show length(state2backward[1])
 
 
 # Plot all regions #
-plt_in1  = plot_hrep_vanderpol(state2input)
+# plt_in1  = plot_hrep_vanderpol(state2input)
 # plt_in2  = plot_hrep_vanderpol(state2backward[1])
 
 # homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
@@ -114,11 +116,12 @@ plt_in1  = plot_hrep_vanderpol(state2input)
 
 
 # Getting mostly suboptimal SDP here
-# A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("vanderpol", 20, 3)
+A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("vanderpol", nn_weights, 20, 7, nn_params=nn_params)
+@show plt_in2
 # 10 steps is ~35k polytopes with ~300 polytopes in the BRS
 # 15 steps is 88,500 polytopes with 895 polytopes in the BRS
 # algorithm does ~1000 polytopes per minute.
 # Create gif of backward reachable set
-# BRS_gif(model, Aᵢ, bᵢ, A_roa, b_roa, 5)
+# BRS_gif(nn_weights, nn_params, Aᵢ, bᵢ, A_roa, b_roa, 5)
 # nothing
 
