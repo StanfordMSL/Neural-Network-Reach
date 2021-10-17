@@ -47,7 +47,7 @@ function nnet_load(filename)
 
 	σᵢ = Diagonal(nnet.ranges[1:end-1])
 	μᵢ = nnet.means[1:end-1]
-	σₒ = nnet.ranges[end]*Matrix{Float64}(I, nnet.inputSize, nnet.inputSize)
+	σₒ = nnet.ranges[end]*Matrix{Float64}(I, nnet.outputSize, nnet.outputSize)
 	μₒ = nnet.means[end]*ones(nnet.outputSize)
 	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
 	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
@@ -238,9 +238,25 @@ end
 
 ``` load in all taxinet networks to make closed-loop network ```
 function taxinet_cl()
-	state2image = nnet_load("/models/taxinet/full_mlp_supervised_2input.nnet")
-	image2state = nnet_load("/models/taxinet/TinyTaxiNet.nnet")
-	state2state′ = pytorch_net_taxi("/models/taxinet/weights_dynamics_small.npz", "/models/taxinet/norm_params_dynamics_small.npz")
+	net_a = nnet_load("models/taxinet/full_mlp_supervised_2input.nnet")
+	net_b = pytorch_net("models/taxinet/weights_dynamics_small.npz", "models/taxinet/norm_params_dynamics_small.npz", 1)
 
-	weights_cl = nothing 
+	len_a = length(net_a)
+	len_b = length(net_b)
+
+	w = Vector{Array{Float64,2}}(undef, len_a + len_b -1)
+	for i in 1:len_a-1
+		w[i] = net_a[i]
+	end
+
+	# Connect the networks
+	w_temp_a = vcat(net_a[end], reshape(zeros(size(net_a[end],2)),1,:))
+	w_temp_a[end,end] = 1
+	w[len_a] = net_b[1] * w_temp_a
+
+	for i in len_a + 1:length(w)
+		w[i] = net_b[i - len_a + 1]
+	end
+
+	return w 
 end
