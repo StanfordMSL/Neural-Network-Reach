@@ -547,9 +547,9 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 	# Initialize algorithm #
-	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
+	# fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
 	# check whether input is in interior of cell. If so, find a new input.
-	# input = 3*randn(2) # need to test that input is not on cell boundary
+	input = 0.0001*randn(2) # need to test that input is not on cell boundary
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)

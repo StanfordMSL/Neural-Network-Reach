@@ -258,5 +258,5 @@ function taxinet_cl()
 		w[i] = net_b[i - len_a + 1]
 	end
 
-	return w 
+	return w
 end

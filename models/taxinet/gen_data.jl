@@ -5,7 +5,7 @@ bound_r(a,b) = (b-a)*(rand()-1) + b
 
 ```
 from https://arxiv.org/pdf/2105.07091.pdf Eq. 8
-x = [p, θ] where p in meters and θ in degrees
+x = "["p, θ"]"" where p in meters and θ in degrees
 ```
 function dynamics(x; dt=0.05)
 	v, L= 5, 5
