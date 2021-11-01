@@ -5,7 +5,7 @@ include("invariance.jl")
 # Returns H-rep of various input sets
 function input_constraints_taxinet(weights)
 	A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
-	# b = [1., 1., 1., 1.]
+	b = [0.01, 0.01, 0.01, 0.01]
 	# b = [11., 11., 30., 30.]
 	return A, b
 end
@@ -73,9 +73,8 @@ plt_in1  = plot_hrep_taxinet(state2input)
 homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
 println("PWA function is a homeomorphism: ", homeomorph)
 
-# fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
-# fp = fixed_points[1]
-# @show fp
+fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
+@show fixed_points
 
 
 # Getting mostly suboptimal SDP here
