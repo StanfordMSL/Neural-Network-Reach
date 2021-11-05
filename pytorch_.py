@@ -101,7 +101,7 @@ def test(dataloader, model, loss_fn):
 
 
 # Choose dynamics: "vanderpol", "mpc", "taxinet_dyn", "pend_ctrl"
-dynamics = "pend_ctrl"
+dynamics = "taxinet_dyn"
 
 if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
@@ -110,8 +110,11 @@ else:                         device = torch.device("cpu")
 # X = numpy.load("models/taxinet/Y_image.npy")
 # Y = numpy.load("models/taxinet/X_image.npy")
 
-X = numpy.load("models/Pendulum/X_controlled.npy")
-Y = numpy.load("models/Pendulum/Y_controlled.npy")
+X = numpy.load("models/taxinet/X_dynamics.npy")
+Y = numpy.load("models/taxinet/Y_dynamics.npy")
+
+# X = numpy.load("models/Pendulum/X_controlled.npy")
+# Y = numpy.load("models/Pendulum/Y_controlled.npy")
 
 # X = numpy.load("models/" + dynamics + "/X.npy")
 # Y = numpy.load("models/" + dynamics + "/Y.npy")
@@ -135,7 +138,7 @@ batch_size = 100
 train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
-layer_sizes = numpy.array([in_dim, 10, 10, out_dim])
+layer_sizes = numpy.array([in_dim, 8, out_dim])
 model = FFReLUNet(layer_sizes).to(device)
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-6)
@@ -161,8 +164,8 @@ for name, param in model.named_parameters():
 
     
 # save weights and normalization parameters
-numpy.savez("models/Pendulum/weights_controlled.npz", *weights)
-numpy.savez("models/Pendulum/norm_params_controlled.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+numpy.savez("models/taxinet/weights_dynamics.npz", *weights)
+numpy.savez("models/taxinet/norm_params_dynamics.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
 # numpy.savez("models/" + dynamics + "/weights.npz", *weights)
 # numpy.savez("models/" + dynamics + "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)

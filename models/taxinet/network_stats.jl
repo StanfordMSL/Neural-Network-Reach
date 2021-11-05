@@ -3,6 +3,7 @@
 
 using Plots
 include("../../nnet.jl")
+include("../../load_networks.jl")
 
 ```Generates a uniformly random number on "["a,b"]"```
 bound_r(a,b) = (b-a)*(rand()-1) + b
@@ -23,15 +24,55 @@ bound_r(a,b) = (b-a)*(rand()-1) + b
 # plt1 = plot(reuse=false, legend=false, title="State Estimation Error", xlabel="x₁: Crosstrack Position (m.)", ylabel="x₂: Heading (deg.)")
 # scatter!(plt1, errors[1,:], errors[2,:])
 
+# Update control 1Hz
+# Update dynamics 20Hz
 
-weights = taxinet_cl()
-m = 200
-xₒ = [0.5, -1]
-traj = Matrix{Float64}(undef, 2, m)
-for i in 1:m
-	traj[:,i] = eval_net(xₒ, weights, i)
+function dynamics(x, u; dt=0.05)
+	v, L= 5, 5
+	x′ = [x[1] + v*sind(x[2])*dt, x[2] + rad2deg((v/L)*tand(u))*dt, x[3] + v*dt*cosd(x[2])] # changed this.
+	return x′
 end
 
+function dynamics_learned(x, u; dt=0.05)
+	v, L= 5, 5
+	x′ = [eval_net(x[1:2], W_dyn, 1); x[3] + v*dt*cosd(x[2])] # changed this.
+	return x′
+end
+
+W_gen_est = nnet_load("models/taxinet/full_mlp_supervised_2input.nnet") # x -> x_est
+W_gen_4in = nnet_load("models/taxinet/full_mlp_supervised.nnet") # [z; x] -> x_est
+W_dyn =  pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm_params_dynamics.npz", 1)
+
+# latent variable that gives best tracking to centerline
+z = [-1.8940158446577924, 0.9738946920139069]
+
+function step(x)
+	x_est = eval_net(x[1:2], W_gen_est, 1)
+	# @show x_est ≈ eval_net([z; x], W_gen_4in, 1)
+	u = [-0.74, -0.44]⋅x_est
+	return dynamics(x, u)
+end
+
+function step_learned(x)
+	x_est = eval_net(x[1:2], W_gen_est, 1)
+	# @show x_est ≈ eval_net([z; x], W_gen_4in, 1)
+	u = [-0.74, -0.44]⋅x_est
+	return dynamics_learned(x, u)
+end
+
+weights = taxinet_cl()
+m = 500
+
 # Plot trajectory
-plt2 = plot(reuse=false, legend=false, title="Trajectory", xlabel="Step", ylabel="x₁: Crosstrack Position (m.)")
-scatter!(plt2, 1:m, traj[1,:])
+plt2 = plot(reuse=false, legend=false, xlabel="Downtrack Position (m.)", ylabel="x₁: Crosstrack Position (m.)")
+for ii = -9:9
+	xₒ = [ii, 0.0, 0.0]
+	traj = Matrix{Float64}(undef, 3, m) # [crosstrack position, heading error, downtrack position]
+	traj[:,1] = xₒ
+	for i in 2:m
+		traj[:,i] = step_learned(traj[:,i-1])
+	end
+	plot!(plt2, traj[3,:], traj[1,:], xlims=[0, 120], ylims=[-10, 10])
+end
+
+plt2

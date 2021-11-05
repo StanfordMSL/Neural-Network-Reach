@@ -20,7 +20,7 @@ bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,
 # generates data where each X[i,:] is an input and each corresponding Y[i,:] is an output
 function gen_data(n)
 	dt = 0.1
-	X = hcat([[bound_r(-2*π/3, 2*π/3), bound_r(-π, π), bound_r(-2,2)] for i in 1:n]...)'
+	X = hcat([[bound_r(2*π/3, 4*π/3), bound_r(-π, π), bound_r(-2,2)] for i in 1:n]...)'
 	Y = hcat([RK_update(X[i,1:2], X[i,3], dt) for i in 1:n]...)'
 	npzwrite("models/Pendulum/X_controlled.npy", X)
 	npzwrite("models/Pendulum/Y_controlled.npy", Y)

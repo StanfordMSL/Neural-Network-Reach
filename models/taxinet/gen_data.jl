@@ -1,20 +1,26 @@
 using NPZ, LinearAlgebra
 
-```generates a uniformly random number on [a,b]```
+# generates a uniformly random number on [a,b]
 bound_r(a,b) = (b-a)*(rand()-1) + b
 
-```
+#=
 from https://arxiv.org/pdf/2105.07091.pdf Eq. 8
-x = "["p, θ"]"" where p in meters and θ in degrees
-```
+x = [p, θ] where p in meters and θ in degrees
+=#
 function dynamics(x; dt=0.05)
 	v, L= 5, 5
 	u = [-0.74, -0.44]⋅x
-	x′ = [x[1] + v*sind(x[2]*dt), x[2] + (v/L)*tand(u)*dt]
+	x′ = [x[1] + v*sind(x[2])*dt, x[2] + rad2deg((v/L)*tand(u))*dt] # changed this.
 	return x′
 end
 
-```generate input data```
+# function dynamics(x, u; dt=0.05)
+# 	v, L= 5, 5
+# 	x′ = [x[1] + v*sind(x[2])*dt, x[2] + rad2deg((v/L)*tand(u))*dt, x[3] + v*dt*cosd(x[2])] # changed this.
+# 	return x′
+# end
+
+# generate input data
 function gen_data(n::Int)
 	X, Y = Matrix{Float64}(undef, n, 2), Matrix{Float64}(undef, n, 2)
 	for i in 1:n
