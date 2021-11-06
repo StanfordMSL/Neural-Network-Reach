@@ -260,3 +260,44 @@ function taxinet_cl()
 
 	return w
 end
+
+
+
+
+function taxinet_2input_resid()
+	# net a is x -> x_est
+	# want it to be x -> u, x    where u = [-0.74, -0.44]⋅x_est
+	net_a = nnet_load("models/taxinet/full_mlp_supervised_2input.nnet")
+	len_a = length(net_a)
+	II = Matrix{Float64}(I, 2, 2)
+
+	for i in 1:len_a
+		if i == 1
+			loc = 1:2
+			net_a[i] = vcat(net_a[i], zeros(4, size(net_a[i],2)))
+			net_a[i][end-4:end-1, loc] = [II; -II]
+			net_a[i][end-4:end-1, end] = zeros(4)
+			net_a[i][end,end] = 1
+		elseif i == len_a
+			loc = size(net_a[i-1],1) - 4 : size(net_a[i-1],1) - 1 # index collection for augmented indices
+			temp = zeros(3, size(net_a[i],2)+4)
+			weight_rows, weight_cols = 1:size(net_a[i],1), 1:size(net_a[i],2)-1
+			w = net_a[i][weight_rows, weight_cols]
+			b = net_a[i][:, end]
+			temp[1, 1:end-5] = reshape(w'*[-0.74, -0.44], 1, :) # add in weights
+			temp[1, end] = b⋅[-0.74, -0.44]
+			temp[2:3, loc] = [II -II]
+			net_a[i] = temp
+		else 
+			loc = size(net_a[i-1],1) - 4 : size(net_a[i-1],1) - 1 # index collection for augmented indices
+			temp = zeros(size(net_a[i],1)+4, size(net_a[i],2)+4)
+			weight_rows, weight_cols = 1:size(net_a[i],1)-1, 1:size(net_a[i],2)-1
+			temp[weight_rows, weight_cols] = net_a[i][weight_rows, weight_cols] # add in weights
+			temp[1:end-1, end] = vcat(net_a[i][1:end-1,end], zeros(4)) # new bias
+			temp[end-4:end-1, loc] = [II -II; -II II]
+			temp[end,end] = 1
+			net_a[i] = temp
+		end
+	end
+	return net_a
+end

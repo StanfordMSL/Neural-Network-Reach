@@ -46,18 +46,11 @@ W_dyn =  pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm
 # latent variable that gives best tracking to centerline
 z = [-1.8940158446577924, 0.9738946920139069]
 
-function step(x)
+function step(x; learned=false)
 	x_est = eval_net(x[1:2], W_gen_est, 1)
-	# @show x_est ≈ eval_net([z; x], W_gen_4in, 1)
 	u = [-0.74, -0.44]⋅x_est
-	return dynamics(x, u)
-end
-
-function step_learned(x)
-	x_est = eval_net(x[1:2], W_gen_est, 1)
-	# @show x_est ≈ eval_net([z; x], W_gen_4in, 1)
-	u = [-0.74, -0.44]⋅x_est
-	return dynamics_learned(x, u)
+	learned ? (dynamics_learned(x, u)) : (return dynamics([x_est; x[3]], u))
+	
 end
 
 weights = taxinet_cl()
@@ -70,7 +63,7 @@ for ii = -9:9
 	traj = Matrix{Float64}(undef, 3, m) # [crosstrack position, heading error, downtrack position]
 	traj[:,1] = xₒ
 	for i in 2:m
-		traj[:,i] = step_learned(traj[:,i-1])
+		traj[:,i] = step(traj[:,i-1], learned=false)
 	end
 	plot!(plt2, traj[3,:], traj[1,:], xlims=[0, 120], ylims=[-10, 10])
 end
