@@ -236,10 +236,11 @@ function pytorch_mpc_net(model, copies::Int64)
 end
 
 
-``` load in all taxinet networks to make closed-loop network ```
+# load in all taxinet networks to make closed-loop network
+# Need to change
 function taxinet_cl()
-	net_a = nnet_load("models/taxinet/full_mlp_supervised_2input.nnet")
-	net_b = pytorch_net("models/taxinet/weights_dynamics_small.npz", "models/taxinet/norm_params_dynamics_small.npz", 1)
+	net_a = taxinet_2input_resid() # x -> [u; x]
+	net_b = pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm_params_dynamics.npz", 1) # [u; x] -> x′
 
 	len_a = length(net_a)
 	len_b = length(net_b)
@@ -267,7 +268,7 @@ end
 function taxinet_2input_resid()
 	# net a is x -> x_est
 	# want it to be x -> u, x    where u = [-0.74, -0.44]⋅x_est
-	net_a = nnet_load("models/taxinet/full_mlp_supervised_2input.nnet")
+	net_a = nnet_load("models/taxinet/full_mlp_supervised_2input_0.nnet")
 	len_a = length(net_a)
 	II = Matrix{Float64}(I, 2, 2)
 

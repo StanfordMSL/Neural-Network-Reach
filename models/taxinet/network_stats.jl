@@ -29,43 +29,62 @@ bound_r(a,b) = (b-a)*(rand()-1) + b
 
 function dynamics(x, u; dt=0.05)
 	v, L= 5, 5
-	x′ = [x[1] + v*sind(x[2])*dt, x[2] + rad2deg((v/L)*tand(u))*dt, x[3] + v*dt*cosd(x[2])] # changed this.
+	x′ = [x[1] + v*sind(x[2])*dt, x[2] + rad2deg((v/L)*tand(u))*dt, x[3] + v*dt*cosd(x[2])]
 	return x′
 end
 
 function dynamics_learned(x, u; dt=0.05)
 	v, L= 5, 5
-	x′ = [eval_net(x[1:2], W_dyn, 1); x[3] + v*dt*cosd(x[2])] # changed this.
+	x′ = [eval_net([u; x[1:2]], W_dyn, 1); x[3] + v*dt*cosd(x[2])] # changed this.
 	return x′
 end
 
-W_gen_est = nnet_load("models/taxinet/full_mlp_supervised_2input.nnet") # x -> x_est
+W_gen_est = nnet_load("models/taxinet/full_mlp_supervised_2input_0.nnet") # x -> x_est
 W_gen_4in = nnet_load("models/taxinet/full_mlp_supervised.nnet") # [z; x] -> x_est
-W_dyn =  pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm_params_dynamics.npz", 1)
+W_dyn =  pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm_params_dynamics.npz", 1) # [u; x] -> x′
+W_ux = taxinet_2input_resid() # x -> [u; x]
+W_cl = taxinet_cl()
 
 # latent variable that gives best tracking to centerline
-z = [-1.8940158446577924, 0.9738946920139069]
+# z = [0, 0]
 
 function step(x; learned=false)
 	x_est = eval_net(x[1:2], W_gen_est, 1)
+	# x_est = eval_net([z; x[1:2]], W_gen_4in, 1)
 	u = [-0.74, -0.44]⋅x_est
-	learned ? (dynamics_learned(x, u)) : (return dynamics([x_est; x[3]], u))
-	
+	learned ? (return dynamics_learned(x, u)) : (return dynamics(x, u))
 end
 
-weights = taxinet_cl()
-m = 500
+m = 1500
 
-# Plot trajectory
-plt2 = plot(reuse=false, legend=false, xlabel="Downtrack Position (m.)", ylabel="x₁: Crosstrack Position (m.)")
+# Plot true trajectories
+# plt2 = plot(reuse=false, legend=false, xlabel="Downtrack Position (m.)", ylabel="x₁: Crosstrack Position (m.)")
+# for ii = -9:9
+# 	xₒ = [ii, 0.0, 0.0]
+# 	traj = Matrix{Float64}(undef, 3, m) # [crosstrack position, heading error, downtrack position]
+# 	traj[:,1] = xₒ
+# 	for i in 2:m
+# 		traj[:,i] = step(traj[:,i-1], learned=true)
+# 	end
+# 	plot!(plt2, traj[3,:], traj[1,:], xlims=[0, 120], ylims=[-10, 10])
+# end
+
+
+# Plot closed-loop NN trajectories
+plt3 = plot(reuse=false, legend=false, xlabel="Downtrack Position (m.)", ylabel="x₁: Crosstrack Position (m.)")
 for ii = -9:9
 	xₒ = [ii, 0.0, 0.0]
-	traj = Matrix{Float64}(undef, 3, m) # [crosstrack position, heading error, downtrack position]
-	traj[:,1] = xₒ
+	traj_nn = Matrix{Float64}(undef, 3, m) # [crosstrack position, heading error, downtrack position]
+	traj_nn[:,1] = xₒ
 	for i in 2:m
-		traj[:,i] = step(traj[:,i-1], learned=false)
+		x′ = eval_net(traj_nn[1:2, i-1], W_cl, 1)
+		d′ = traj_nn[3, i-1] + 5*0.05*cosd(traj_nn[2, i-1])
+		traj_nn[:,i] = [x′; d′]
 	end
-	plot!(plt2, traj[3,:], traj[1,:], xlims=[0, 120], ylims=[-10, 10])
+	@show traj_nn[:,end]
+	plot!(plt3, traj_nn[3,:], traj_nn[1,:], xlims=[0, 120], ylims=[-10, 10])
 end
 
-plt2
+
+plt3
+

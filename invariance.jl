@@ -324,6 +324,11 @@ function find_roa(dynamics::String, nn_weights, num_constraints, num_steps; nn_p
 		Aᵢ, bᵢ = input_constraints_mpc(weights, "box")
 		Aₒ, bₒ = output_constraints_mpc(weights, "origin")
 		println("Input set: MPC box")
+	elseif dynamics == "taxinet"
+		weights = taxinet_cl()
+		Aᵢ, bᵢ = input_constraints_taxinet(weights)
+		Aₒ, bₒ = output_constraints_taxinet(weights)
+		println("Input set: Taxinet box")
 	else
 		error("Unrecognized dynamics!")
 	end
@@ -355,6 +360,11 @@ function find_roa(dynamics::String, nn_weights, num_constraints, num_steps; nn_p
 		weights_chain = pytorch_net(nn_weights, nn_params, num_steps)
 	elseif dynamics == "mpc"
 		weights_chain = pytorch_mpc_net("mpc", num_steps)
+	elseif dynamics == "taxinet"
+		num_layers = length(weights)
+		layer_sizes = [size(weights[i],2) for i in 1:num_layers]
+		push!(layer_sizes, size(weights[end],1))
+		weights_chain = chain_net(weights, num_steps+1, num_layers, layer_sizes)
 	end
 	state2input_chain, state2output_chain, state2map_chain, state2backward_chain = compute_reach(weights_chain, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, back=true, connected=true)
 	
@@ -366,6 +376,9 @@ function find_roa(dynamics::String, nn_weights, num_constraints, num_steps; nn_p
 		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-3, 3), ylims=(-3, 3))
 	elseif dynamics == "mpc"
 		plt_in2  = plot_hrep_mpc(state2backward_chain[1])
+		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-5, 5), ylims=(-5, 5))
+	elseif dynamics == "taxinet"
+		plt_in2  = polytopes(state2backward_chain[1])
 		plot!(plt_in2, title=string(num_steps, "-Step BRS"), xlims=(-5, 5), ylims=(-5, 5))
 	end
 

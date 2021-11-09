@@ -145,7 +145,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), w
 print("\n", model)
 
 # Train
-epochs = 7
+epochs = 1
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
