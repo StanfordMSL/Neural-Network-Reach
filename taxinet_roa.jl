@@ -5,7 +5,9 @@ include("invariance.jl")
 # Returns H-rep of various input sets
 function input_constraints_taxinet(weights)
 	A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
-	b = [-1.05, 1.15, -0.1, 0.15]
+	# b = [0.05, 0.05, 0.05, 0.05]
+	b = [5.0, 5.0, 2.3, 2.3]
+	# b = [-1.05, 1.15, -0.1, 0.15]
 	# b = [11., 11., 30., 30.]
 	return A, b
 end
@@ -51,7 +53,7 @@ end
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
 copies = 1 # copies = 1 is original network
-weights = taxinet_cl()
+weights = taxinet_cl(copies)
 
 Aᵢ, bᵢ = input_constraints_taxinet(weights)
 Aₒ, bₒ = output_constraints_taxinet(weights)
@@ -64,21 +66,25 @@ b_roa = [0.9867664026962134, 1.0030239594320969, 0.9973298133488417, 1.008186969
 
 # Run algorithm
 @time begin
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
 end
 @show length(state2input)
-@show length(state2backward[1])
+# @show length(state2backward[1])
 
 
 # Plot all regions #
-plt_in1  = plot_hrep_taxinet(state2input)
-plt_in2  = plot_hrep_taxinet(state2backward[1])
+# plt_in1  = plot_hrep_taxinet(state2input)
+# plt_in2  = plot_hrep_taxinet(state2backward[1])
 
 
 # determine if function is a homeomorphism
 homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
 println("PWA function is a homeomorphism: ", homeomorph)
+
+# save pwa map 
+using FileIO
+save("models/taxinet/taxinet_pwa_map.jld2", Dict("state2map" => state2map, "state2input" => state2input, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 # find any fixed points if they exist

@@ -238,7 +238,7 @@ end
 
 # load in all taxinet networks to make closed-loop network
 # Need to change
-function taxinet_cl()
+function taxinet_cl(copies::Int64)
 	net_a = taxinet_2input_resid() # x -> [u; x]
 	net_b = pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm_params_dynamics.npz", 1) # [u; x] -> x′
 
@@ -259,7 +259,12 @@ function taxinet_cl()
 		w[i] = net_b[i - len_a + 1]
 	end
 
-	return w
+	num_layers = length(w)
+	layer_sizes = [size(w[i],2) for i in 1:num_layers]
+	push!(layer_sizes, size(w[end],1))
+	
+	weights = chain_net(w, copies, num_layers, layer_sizes)
+	return weights
 end
 
 

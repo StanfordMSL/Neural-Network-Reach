@@ -31,15 +31,16 @@ end
 # Returns the algorithm initialization point given task and input space constraints
 function get_input(Aᵢ, bᵢ, weights)
 	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])
-	i = 1
-	while !interior_input(input, weights)
-		input += 1e-6*randn(size(Aᵢ,2))
-		if i == 100
-			error("Couldn't generate interior input.")
-		end
-		i += 1
-	end
-	return input
+	return input + 0.0001*randn(length(input))
+	# i = 1
+	# while !interior_input(input, weights)
+	# 	input += 1e-6*randn(size(Aᵢ,2))
+	# 	if i == 100
+	# 		error("Couldn't generate interior input.")
+	# 	end
+	# 	i += 1
+	# end
+	# return input
 end
 
 # checks whether input is on cell boundary
@@ -547,10 +548,10 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 	# Initialize algorithm #
-	# fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
+	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
 	# check whether input is in interior of cell. If so, find a new input.
 	# input = 0.0001*randn(2) # need to test that input is not on cell boundary
-	input = [-1.0899274931805163, -0.12567904584271794]
+	# input = [-1.0899274931805163, -0.12567904584271794]
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)
