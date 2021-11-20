@@ -315,7 +315,7 @@ end
 
 ### FUNCTIONS FOR FINDING NEIGHBORS ###
 # Adds neighbor aps to working_set
-function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential)	
+function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential, ap2neighbors; graph=false)	
 	for idx in neighbor_indices
 		neighbor_ap = deepcopy(ap)
 		l, n = get_layer_neuron(idx, neighbor_ap)
@@ -325,6 +325,22 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 		type2 = zerows
 		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 
+		
+		if graph
+			if !haskey(ap2neighbors, ap)
+				ap2neighbors[ap] = [neighbor_ap]
+			elseif neighbor_ap ∉ ap2neighbors[ap]
+				push!(ap2neighbors[ap], neighbor_ap)
+			end
+
+			if !haskey(ap2neighbors, neighbor_ap)
+				ap2neighbors[neighbor_ap] = [ap]
+			elseif ap ∉ ap2neighbors[neighbor_ap]
+				push!(ap2neighbors[neighbor_ap], ap)
+			end
+		end
+
+		
 		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set
 			push!(working_set, neighbor_ap)
 			ap2essential[neighbor_ap] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
@@ -539,19 +555,17 @@ end
 # Given input point and weights return ap2input, ap2output, ap2map, plt_in, plt_out
 # set reach=false for just cell enumeration
 # Supports looking for multiple backward reachable sets at once
-function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; fp = [], reach=false, back=false, verification=false, connected=false)
+function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; fp = [], reach=false, back=false, verification=false, connected=false, graph=false)
 	# Construct necessary data structures #
 	ap2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
 	ap2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
 	ap2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
 	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
+	ap2neighbors = Dict{Vector{BitVector}, Vector{Vector{BitVector}}}() # Dict from ap to neuron indices we know are essential
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 	# Initialize algorithm #
 	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
-	# check whether input is in interior of cell. If so, find a new input.
-	# input = 0.0001*randn(2) # need to test that input is not on cell boundary
-	# input = [-1.0899274931805163, -0.12567904584271794]
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)
@@ -595,7 +609,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
 					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
-					working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
+					working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
 				end
 			end
 		elseif back # add neighbors of all cells
@@ -605,10 +619,10 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
 				end
 			end
-			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
+			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
 		else
 			# add neighbors of all cells
-			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
+			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
 		end
 		# ap2input[ap] = (vcat(A, Aᵢ), vcat(b, bᵢ))
 		ap2input[ap] = (A, b)
@@ -623,5 +637,10 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	total_lps = saved_lps + solved_lps
 	println("Total solved LPs: ", solved_lps)
 	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
-	return ap2input, ap2output, ap2map, ap2backward
+
+	if graph
+		return ap2input, ap2output, ap2map, ap2backward, ap2neighbors
+	else
+		return ap2input, ap2output, ap2map, ap2backward
+	end
 end

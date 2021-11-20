@@ -79,7 +79,7 @@ end
 
 
 ``` chain together multiple networks ```
-function chain_net(w, copies, num_layers, layer_sizes)
+function chain_net(w, copies, num_layers)
 	weights = Vector{Array{Float64,2}}(undef, copies*num_layers - (copies-1))
 	merged_layers = [c*num_layers - (c-1) for c in 1:copies]
 	w_idx = 1
@@ -90,7 +90,7 @@ function chain_net(w, copies, num_layers, layer_sizes)
 		elseif k == length(weights)
 			weights[k] = w[end]
 		elseif k in merged_layers
-			w̄ₒ = vcat(w[end], reshape(zeros(1+layer_sizes[end-1]),1,:))
+			w̄ₒ = vcat(w[end], reshape(zeros(size(w[end],2)),1,:))
 			w̄ₒ[end,end] = 1
 			weights[k] = w[1]*w̄ₒ
 			w_idx = 2
@@ -131,7 +131,7 @@ function pendulum_net(filename::String, copies::Int64)
 	bias   = Aₒᵤₜ*vec(model["biases"][end]) + bₒᵤₜ
 	w[end] = hcat(weight, vec(bias))
 	
-	weights = chain_net(w, copies, num_layers, layer_sizes)
+	weights = chain_net(w, copies, num_layers)
 
 	return weights
 end
@@ -169,7 +169,7 @@ function pytorch_net(nn_weights, nn_params, copies::Int64)
 	bias   = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ
 	w[end] = hcat(weight, vec(bias))
 
-	weights = chain_net(w, copies, num_layers, layer_sizes)
+	weights = chain_net(w, copies, num_layers)
 
 	return weights
 end
@@ -231,7 +231,7 @@ function pytorch_mpc_net(model, copies::Int64)
 	end
 	layer_sizes[end] = layer_sizes[1]
 
-	weights = chain_net(w, copies, num_layers, layer_sizes)
+	weights = chain_net(w, copies, num_layers)
 	return weights
 end
 
@@ -259,11 +259,7 @@ function taxinet_cl(copies::Int64)
 		w[i] = net_b[i - len_a + 1]
 	end
 
-	num_layers = length(w)
-	layer_sizes = [size(w[i],2) for i in 1:num_layers]
-	push!(layer_sizes, size(w[end],1))
-	
-	weights = chain_net(w, copies, num_layers, layer_sizes)
+	weights = chain_net(w, copies, length(w))
 	return weights
 end
 

@@ -1,4 +1,4 @@
-using Plots
+using Plots, FileIO
 include("reach.jl")
 include("invariance.jl")
 
@@ -7,7 +7,7 @@ function input_constraints_taxinet(weights)
 	A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
 	# b = [0.05, 0.05, 0.05, 0.05]
 	b = [5.0, 5.0, 2.3, 2.3]
-	# b = [-1.05, 1.15, -0.1, 0.15]
+	# b = [-1.0, 1.11, 0.01, 0.8]
 	# b = [11., 11., 30., 30.]
 	return A, b
 end
@@ -60,13 +60,13 @@ Aₒ, bₒ = output_constraints_taxinet(weights)
 
 # Already found fixed point and seed ROA
 fp = [-1.089927713157323, -0.12567755953751042]
-A_roa = [-0.5989801202026732 -0.18513226080861578; 0.012078943003279052 0.040868423421668826; -0.41121213687204483 -0.040694624447252484; 0.4111192278275168 0.11499869189110568; 0.13786071030857897 -0.026813295697633487; -0.03515382829869035 -0.07641852864614132; -0.6771039664098355 -0.15917355099470454]
-b_roa = [0.9867664026962134, 1.0030239594320969, 0.9973298133488417, 1.00818696973037, 0.9978915112240178, 0.9943563303365947, 0.9887604260847158]
-
+A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
+b_roa = ones(size(A_roa,1)) + A_roa*fp
+reg_roa = HPolytope(constraints_list(A_roa, b_roa))
 
 # Run algorithm
 @time begin
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
+state2input, state2output, state2map, state2backward, state2neighbors = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], graph=true)
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
 end
 @show length(state2input)
@@ -74,17 +74,16 @@ end
 
 
 # Plot all regions #
-# plt_in1  = plot_hrep_taxinet(state2input)
+# plt_in1 = plot_hrep_taxinet(state2input)
+# scatter!(plt_in1, [fp[1]], [fp[2]])
+# plot!(plt_in1, reg_roa)
+
 # plt_in2  = plot_hrep_taxinet(state2backward[1])
 
 
 # determine if function is a homeomorphism
 homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
 println("PWA function is a homeomorphism: ", homeomorph)
-
-# save pwa map 
-using FileIO
-save("models/taxinet/taxinet_pwa_map.jld2", Dict("state2map" => state2map, "state2input" => state2input, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 # find any fixed points if they exist
@@ -95,9 +94,16 @@ save("models/taxinet/taxinet_pwa_map.jld2", Dict("state2map" => state2map, "stat
 # find an attractive fixed point and return it's affine function y=Cx+d and polytope Aₓx≤bₓ
 # fp, C, d, Aₓ, bₓ = find_attractor(fixed_points, fp_dict)
 
-
-
-
 # Getting mostly suboptimal SDP here
 # A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("taxinet", weights, 40, 1)
 # @show plt_in2
+
+
+
+# save pwa map 
+save("models/taxinet/taxinet_pwa_map.jld2", Dict("state2map" => state2map, "state2input" => state2input, "state2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
+
+# Load in saved function #
+# pwa_dict = load("models/taxinet/taxinet_pwa_map.jld2")
+# state2input = pwa_dict["state2input"]
+# plt_in1 = plot_hrep_taxinet(state2input)
