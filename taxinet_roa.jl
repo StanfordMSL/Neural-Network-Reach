@@ -65,11 +65,11 @@ b_roa = ones(size(A_roa,1)) + A_roa*fp
 reg_roa = HPolytope(constraints_list(A_roa, b_roa))
 
 # Run algorithm
-@time begin
-state2input, state2output, state2map, state2backward, state2neighbors = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], graph=true)
+# @time begin
+# state2input, state2output, state2map, state2backward, state2neighbors = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], graph=true)
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
-end
-@show length(state2input)
+# end
+# @show length(state2input)
 # @show length(state2backward[1])
 
 
@@ -82,8 +82,8 @@ end
 
 
 # determine if function is a homeomorphism
-homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
-println("PWA function is a homeomorphism: ", homeomorph)
+# homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
+# println("PWA function is a homeomorphism: ", homeomorph)
 
 
 # find any fixed points if they exist
@@ -101,7 +101,7 @@ println("PWA function is a homeomorphism: ", homeomorph)
 
 
 # save pwa map 
-save("models/taxinet/taxinet_pwa_map.jld2", Dict("state2map" => state2map, "state2input" => state2input, "state2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
+# save("models/taxinet/taxinet_pwa_map.jld2", Dict("state2map" => state2map, "state2input" => state2input, "state2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 # Load in saved function #
 # pwa_dict = load("models/taxinet/taxinet_pwa_map.jld2")

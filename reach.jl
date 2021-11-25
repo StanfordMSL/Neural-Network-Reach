@@ -341,7 +341,7 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 		end
 
 		
-		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set
+		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set # if I haven't explored it && it's not yet in the working set
 			push!(working_set, neighbor_ap)
 			ap2essential[neighbor_ap] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
 		end
