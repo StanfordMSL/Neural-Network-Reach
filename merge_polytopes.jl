@@ -15,13 +15,19 @@ function plot_brs(brs)
 end
 
 
+
+
+
+
 # Load in polytope collection
 brs_dict = load(string("models/taxinet/BRS/taxinet_brs_", 10, "_step.jld2"))
 out_set = brs_dict["brs"]
 plt = plot_brs(out_set)
 out_set_mat = mxarray(collect(out_set))
 l_out = length(out_set)
+println("Started with ", l_out, " polytopes")
 
+# Send polytopes to Matlab variables
 As = Vector{Matrix{Float64}}(undef, 0)
 bs = Vector{Vector{Float64}}(undef, 0)
 for polytope in out_set
@@ -32,29 +38,31 @@ end
 As_mat = mxarray(As)
 bs_mat = mxarray(bs)
 
-# Create data structures
-in_set = Set{ Tuple{Matrix{Float64}, Vector{Float64}} }()
-
-
 
 # interface with Matlab
 mat"""
 for i = 1:length($As_mat)
-	% disp($bs_mat{i})
-	P(i) = Polyhedron($As_mat{i}, $bs_mat{i})
+	P(i) = Polyhedron($As_mat{i}, $bs_mat{i});
 end
 
-U = PolyUnion('Set',P,'convex',false,'overlaps',false,'Connected',true,'fulldim',true,'bounded',true)
-merged = U.merge
-$len = length(merged)
-%disp(U)
+U = PolyUnion('Set',P,'convex',false,'overlaps',false,'Connected',true,'fulldim',true,'bounded',true);
+merged = U.merge;
 
-% disp(merged(1).Set(6).A)
+$len_m = length(U);
+$As_merged = cell($len_m,1);
+$bs_merged = cell($len_m,1);
 
-for i = 1:length(merged)
-	merged(1).Set(i).A
-	merged(1).Set(i).b
+for i = 1:$len_m
+	$As_merged{i,1} = U.Set(i).A;
+ 	$bs_merged{i,1} = U.Set(i).b;
 end
-merged.plot
 """
-# @mget merged
+
+# Send merged polytopes to Julia variables
+println("Ended with ", length(As_merged), " polytopes")
+merged_set = Set{ Tuple{Matrix{Float64}, Vector{Float64}} }()
+for i in 1:length(As_merged)
+	push!(merged_set, (As_merged[i], bs_merged[i]))
+end
+
+plt_merged = plot_brs(merged_set)
