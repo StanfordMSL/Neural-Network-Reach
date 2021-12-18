@@ -1,6 +1,65 @@
-using LinearAlgebra, JuMP, GLPK, FileIO, Plots, LazySets
+#=
+This file is used for performing traditional backward reachability of homeomorphic PWA functions.
+We can't use other implementations, such as from MPT, because they don't take advantage of 
+the homeomorphic property of the PWA function.
 
-# Solve a Feasibility LP to check if two polyhedron intersect
+I use the following polytopic ROA as my 0-step brs
+A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
+b_roa = ones(size(A_roa,1)) + A_roa*fp
+out_set = Set{Tuple{Matrix{Float64},Vector{Float64}}}([(A_roa, b_roa)])
+=#
+
+using LinearAlgebra, JuMP, GLPK, LazySets, MATLAB, FileIO, Plots
+
+#=
+Given a set of polytopes, interface with the Matlab MPT toolbox to greedily merge
+the given union of polytopes into a union of fewer polytopes.
+MPT allows for optimal merging too, but I don't call this.
+=#
+function merge_polytopes(polytopes::Set{ Tuple{Matrix{Float64}, Vector{Float64}} }; verbose=false)
+	verbose ? println("Started with ", length(polytopes), " polytopes") : nothing
+
+	# Send polytopes to Matlab variables
+	As = Vector{Matrix{Float64}}(undef, length(polytopes))
+	bs = Vector{Vector{Float64}}(undef, length(polytopes))
+	for (i,polytope) in enumerate(polytopes)
+		As[i] = polytope[1]
+		bs[i] = polytope[2]
+	end 
+	As_mat = mxarray(As)
+	bs_mat = mxarray(bs)
+
+	# interface with Matlab MPT merge() method for PolyUnion objects
+	mat"""
+	for i = 1:length($As_mat)
+		P(i) = Polyhedron($As_mat{i}, $bs_mat{i});
+	end
+
+	U = PolyUnion('Set',P,'convex',false,'overlaps',false,'Connected',true,'fulldim',true,'bounded',true);
+	merged = U.merge;
+
+	$len_m = length(U);
+	$As_merged = cell($len_m,1);
+	$bs_merged = cell($len_m,1);
+
+	for i = 1:$len_m
+		$As_merged{i,1} = U.Set(i).A;
+	 	$bs_merged{i,1} = U.Set(i).b;
+	end
+	"""
+
+	# Send merged polytopes to Julia variables
+	verbose ? println("Ended with ", length(As_merged), " polytopes") : nothing
+	merged_set = Set{ Tuple{Matrix{Float64}, Vector{Float64}} }()
+	for i in 1:length(As_merged)
+		push!(merged_set, (As_merged[i], bs_merged[i]))
+	end
+
+	return merged_set
+end
+
+
+# Solve a feasibility LP to check if two polyhedron intersect
 function poly_intersection(A₁, b₁, A₂, b₂; presolve=false)
 	dim = max(size(A₁,2), size(A₂,2)) # In the case one of them is empty
 	model = Model(GLPK.Optimizer)
@@ -25,9 +84,10 @@ function poly_intersection(A₁, b₁, A₂, b₂; presolve=false)
 end
 
 
-function plot_brs(brs)
+# Plot union of polytopes
+function plot_polytopes(polytopes)
 	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
-	for (A, b) in brs
+	for (A, b) in polytopes
 		reg = HPolytope(constraints_list(A, b))
 		if isempty(reg)
 			@show reg
@@ -40,22 +100,12 @@ end
 
 
 #=
-4-step brs is largest seed roa I found
+This function computes an i-step BRS, given a saved (i-1)-step step BRS.
+merge flag controls whether BRS polytopes are merged before returning result.
+save flag controls whether the resulting i-step BRS is saved to file
 =#
-
-
-
-brs_dict = load(string("models/taxinet/BRS/taxinet_brs_", 20, "_step.jld2"))
-out_set = brs_dict["brs"]
-plt = plot_brs(out_set)
-
-#=
-# select step i
-for i in 51:100
-	# i = 10
-	println("Computing ", i, "-step BRS.")
-
-
+function backward_reach(i; merge=false, Save=false, verbose=false)
+	verbose ? println("Computing ", i, "-step BRS.") : nothing
 
 	# load in PWA function
 	pwa_dict = load("models/taxinet/taxinet_pwa_map.jld2")
@@ -63,34 +113,26 @@ for i in 51:100
 	ap2input = pwa_dict["ap2input"]
 	ap2neighbors = pwa_dict["ap2neighbors"]
 
-
 	# define the fixed point
 	fp = [-1.089927713157323, -0.12567755953751042]
 
-
 	# load in set to find preimage of
-	# 0-step brs
-	# A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
-	# b_roa = ones(size(A_roa,1)) + A_roa*fp
-	# out_set = Set{Tuple{Matrix{Float64},Vector{Float64}}}([(A_roa, b_roa)])
-
-	# i-step brs
-	brs_dict = load(string("models/taxinet/BRS/taxinet_brs_", i-1, "_step.jld2"))
-	out_set = brs_dict["brs"]
-
+	if merge
+		brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i-1, "_step.jld2"))
+	else
+		brs_dict = load(string("models/taxinet/BRS_no_merge/taxinet_brs_", i-1, "_step.jld2"))
+	end
+	output_polytopes = brs_dict["brs"]
 
 	# find ap for cell that fp lives in
 	ap = pwa_dict["ap_fp"]
 	working_set = Set{Vector{BitVector}}() # APs we want to explore
 	explored_set = Set{Vector{BitVector}}() # APs we have already explored
-	brs = Set{Tuple{Matrix{Float64},Vector{Float64}}}() # backward reachable set, stored as a collection of polytopes
+	brs_polytopes = Set{Tuple{Matrix{Float64},Vector{Float64}}}() # backward reachable set, stored as a collection of polytopes
 	push!(working_set, ap)
 
-
-	# traverse connected input space to enumerate brs
-	j = 0
+	# traverse connected input space to enumerate brs_polytopes
 	while !isempty(working_set)
-		println(j)
 		in_brs = false
 
 		ap = pop!(working_set)
@@ -99,15 +141,15 @@ for i in 51:100
 		A, b = ap2input[ap]
 		
 		# check intersection with preimage of each polytope in output set
-		for (Aₒ, bₒ) in out_set
+		for (Aₒ, bₒ) in output_polytopes
 			Aᵤ, bᵤ = (Aₒ*C, bₒ-Aₒ*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 			if poly_intersection(A, b, Aᵤ, bᵤ)
-				push!(brs, (vcat(A, Aᵤ), vcat(b, bᵤ)))
+				push!(brs_polytopes, (vcat(A, Aᵤ), vcat(b, bᵤ)))
 				in_brs = true
 			end
 		end
 
-		# if a subset of Ax≤b is in the brs then add neighbor APs to the working set
+		# if a subset of Ax≤b is in the brs_polytopes then add neighbor APs to the working set
 		if in_brs
 			for neighbor_ap in ap2neighbors[ap]
 				if neighbor_ap ∉ explored_set && neighbor_ap ∉ working_set
@@ -115,18 +157,28 @@ for i in 51:100
 				end
 			end
 		end
-		# j += 1
 	end
 
-	println("# Polytopes in BRS: ", length(brs))
+	# merge polytopes in BRS
+	if merge
+		brs_polytopes = merge_polytopes(brs_polytopes; verbose=verbose)
+	end
+
 
 	# save the i-step brs
-	save(string("models/taxinet/BRS/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs))
+	if Save
+		save(string("models/taxinet/BRS/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
+	end
 
-	
+	verbose ? println(length(brs_polytopes), " in the BRS.") : nothing
+
+	return brs_polytopes
 end
 
-# plot brs
-plt = plot_brs(brs)
 
-=#
+
+# compute brs union of polytopes
+@time brs_polytopes = backward_reach(11; merge=false, Save=true, verbose=true)
+
+# plot brs
+plt = plot_polytopes(brs_polytopes)
