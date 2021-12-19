@@ -1,3 +1,7 @@
+# MPT3
+I set ```Opt.tol_minR = 1e-10``` in ```mpt/modules/compatibility/optmerge/mpt_exHyperAdv.m``` (Line 124).
+When this tolerance is too large and MPT treats a PolyUnion of 2 polytopes as just 1 polytope, some errors can occur.
+
 # Data
 Dynamics model taken from [this work](https://github.com/sisl/VerifyGAN).  
 ```X_image.npy``` are flattened images from the h5 datasets.  
