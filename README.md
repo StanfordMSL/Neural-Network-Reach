@@ -4,6 +4,7 @@ Exact forward and backward reachability of deep neural networks with ReLU activa
 ## Requirements ##
 - Julia 1.4
 - See Project.toml
+- For the Taxinet example I use [MPT3](https://www.mpt3.org/) (version 3.2.1) with MATLAB R2020a. See the ReadMe for the Taxinet example for more details.
 
 ## Installation ##
 Clone the repository in the desired location:
