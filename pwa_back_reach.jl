@@ -30,21 +30,25 @@ function merge_polytopes(polytopes::Set{ Tuple{Matrix{Float64}, Vector{Float64}}
 	bs_mat = mxarray(bs)
 
 	# interface with Matlab MPT merge() method for PolyUnion objects
+	# optimal merging creates a polytopic covering an hence we set overlaps to true.
 	mat"""
+	clear P;
+	clear U;
+	clear merged;
 	for i = 1:length($As_mat)
 		P(i) = Polyhedron($As_mat{i}, $bs_mat{i});
 	end
 
-	U = PolyUnion('Set',P,'convex',false,'overlaps',false,'Connected',true,'fulldim',true,'bounded',true);
-	merged = U.merge;
+	U = PolyUnion('Set',P,'convex',false,'overlaps',true,'Connected',true,'fulldim',true,'bounded',true);
+	merged = U.merge('optimal', true);
 
-	$len_m = length(U);
+	$len_m = length(merged.Set);
 	$As_merged = cell($len_m,1);
 	$bs_merged = cell($len_m,1);
 
 	for i = 1:$len_m
-		$As_merged{i,1} = U.Set(i).A;
-	 	$bs_merged{i,1} = U.Set(i).b;
+		$As_merged{i,1} = merged.Set(i).A;
+	 	$bs_merged{i,1} = merged.Set(i).b;
 	end
 	"""
 
@@ -160,14 +164,18 @@ function backward_reach(i; merge=false, Save=false, verbose=false)
 	end
 
 	# merge polytopes in BRS
-	if merge
+	if merge && length(brs_polytopes) > 1
 		brs_polytopes = merge_polytopes(brs_polytopes; verbose=verbose)
 	end
 
 
 	# save the i-step brs
 	if Save
-		save(string("models/taxinet/BRS/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
+		if merge
+			save(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
+		else
+			save(string("models/taxinet/BRS_no_merge/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
+		end
 	end
 
 	verbose ? println(length(brs_polytopes), " in the BRS.") : nothing
@@ -177,8 +185,230 @@ end
 
 
 
-# compute brs union of polytopes
-@time brs_polytopes = backward_reach(11; merge=false, Save=true, verbose=true)
 
-# plot brs
-plt = plot_polytopes(brs_polytopes)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Scripting ###
+# brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(6; merge=true, Save=false, verbose=true)
+# plot_polytopes(brs_polytopes)
+
+
+
+
+
+
+
+
+
+
+
+
+max_steps = 100
+times = Matrix{Float64}(undef, max_steps, 2)
+poly_counts = Matrix{Int64}(undef, max_steps, 2)
+
+for i in 1:max_steps
+	println("\n")
+	# compute brs union of polytopes
+	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(i; merge=false, Save=true, verbose=true)
+	times[i,1], poly_counts[i,1] = t, length(brs_polytopes)
+
+	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(i; merge=true, Save=true, verbose=true)
+	times[i,2], poly_counts[i,2] = t, length(brs_polytopes)
+
+	# plot brs
+	# plt = plot_polytopes(brs_polytopes)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Debugging ###
+
+
+# i=3
+# merge=true
+# Save=true
+# verbose=true
+
+
+# verbose ? println("Computing ", i, "-step BRS.") : nothing
+
+# # load in PWA function
+# pwa_dict = load("models/taxinet/taxinet_pwa_map.jld2")
+# ap2map = pwa_dict["ap2map"]
+# ap2input = pwa_dict["ap2input"]
+# ap2neighbors = pwa_dict["ap2neighbors"]
+
+# # define the fixed point
+# fp = [-1.089927713157323, -0.12567755953751042]
+
+# # load in set to find preimage of
+# if merge
+# 	brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i-1, "_step.jld2"))
+# else
+# 	brs_dict = load(string("models/taxinet/BRS_no_merge/taxinet_brs_", i-1, "_step.jld2"))
+# end
+# output_polytopes = brs_dict["brs"]
+
+# # find ap for cell that fp lives in
+# ap = pwa_dict["ap_fp"]
+# working_set = Set{Vector{BitVector}}() # APs we want to explore
+# explored_set = Set{Vector{BitVector}}() # APs we have already explored
+# brs_polytopes = Set{Tuple{Matrix{Float64},Vector{Float64}}}() # backward reachable set, stored as a collection of polytopes
+# push!(working_set, ap)
+
+# # traverse connected input space to enumerate brs_polytopes
+# while !isempty(working_set)
+# 	in_brs = false
+
+# 	ap = pop!(working_set)
+# 	push!(explored_set, ap)
+# 	C, d = ap2map[ap]
+# 	A, b = ap2input[ap]
+	
+# 	# check intersection with preimage of each polytope in output set
+# 	for (Aₒ, bₒ) in output_polytopes
+# 		Aᵤ, bᵤ = (Aₒ*C, bₒ-Aₒ*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
+# 		if poly_intersection(A, b, Aᵤ, bᵤ)
+# 			push!(brs_polytopes, (vcat(A, Aᵤ), vcat(b, bᵤ)))
+# 			in_brs = true
+# 		end
+# 	end
+
+# 	# if a subset of Ax≤b is in the brs_polytopes then add neighbor APs to the working set
+# 	if in_brs
+# 		for neighbor_ap in ap2neighbors[ap]
+# 			if neighbor_ap ∉ explored_set && neighbor_ap ∉ working_set
+# 				push!(working_set, neighbor_ap)
+# 			end
+# 		end
+# 	end
+# end
+
+# # merge polytopes in BRS
+# if merge
+# 	polytopes = brs_polytopes
+# 	verbose ? println("Started with ", length(polytopes), " polytopes") : nothing
+
+# 	# Send polytopes to Matlab variables
+# 	As = Vector{Matrix{Float64}}(undef, length(polytopes))
+# 	bs = Vector{Vector{Float64}}(undef, length(polytopes))
+# 	for (i,polytope) in enumerate(polytopes)
+# 		As[i] = polytope[1]
+# 		bs[i] = polytope[2]
+# 	end 
+# 	As_mat = mxarray(As)
+# 	bs_mat = mxarray(bs)
+
+# 	# interface with Matlab MPT merge() method for PolyUnion objects
+# 	mat"""
+# 	clear P;
+# 	clear U;
+# 	clear merged;
+# 	for i = 1:length($As_mat)
+# 		P(i) = Polyhedron($As_mat{i}, $bs_mat{i});
+# 	end
+
+# 	U = PolyUnion('Set',P,'convex',false,'overlaps',false,'Connected',true,'fulldim',true,'bounded',true);
+# 	merged = U.merge;
+
+# 	disp(merged)
+# 	disp(merged.Set)
+# 	disp(length(merged.Set))
+
+# 	disp(U)
+# 	disp(U.Set)
+# 	disp(length(U.Set))
+
+# 	figure (1)
+# 	plot(U)
+# 	title('U')
+
+# 	figure (2)
+# 	plot(merged)
+# 	title('merged')
+
+# 	$len_m = length(merged.Set);
+# 	$As_merged = cell($len_m,1);
+# 	$bs_merged = cell($len_m,1);
+
+# 	for i = 1:$len_m
+# 		$As_merged{i,1} = merged.Set(i).A;
+# 	 	$bs_merged{i,1} = merged.Set(i).b;
+# 	end
+# 	"""
+
+# 	# Send merged polytopes to Julia variables
+# 	verbose ? println("Ended with ", length(As_merged), " polytopes") : nothing
+# 	merged_set = Set{ Tuple{Matrix{Float64}, Vector{Float64}} }()
+# 	for i in 1:length(As_merged)
+# 		push!(merged_set, (As_merged[i], bs_merged[i]))
+# 	end
+# end
+
+# if Save
+# 	if merge
+# 		save(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"), Dict("brs" => merged_set))
+# 	else
+# 		save(string("models/taxinet/BRS_no_merge/taxinet_brs_", i, "_step.jld2"), Dict("brs" => merged_set))
+# 	end
+# end
+
+# verbose ? println(length(merged_set), " in the BRS.") : nothing
+
+
+# # plot brs
+# plt = plot_polytopes(merged_set)
