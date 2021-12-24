@@ -6,7 +6,8 @@ include("invariance.jl")
 function input_constraints_taxinet(weights)
 	A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
 	# b = [0.05, 0.05, 0.05, 0.05]
-	b = [5.0, 5.0, 2.3, 2.3]
+	# b = [5.0, 5.0, 2.3, 2.3]
+	b = [10., 10., 2., 2.] # +- 10 meters, +- 2 degrees
 	# b = [-1.0, 1.11, 0.01, 0.8]
 	# b = [11., 11., 30., 30.]
 	return A, b
@@ -59,18 +60,22 @@ Aᵢ, bᵢ = input_constraints_taxinet(weights)
 Aₒ, bₒ = output_constraints_taxinet(weights)
 
 # Already found fixed point and seed ROA
-fp = [-1.089927713157323, -0.12567755953751042]
-A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
-b_roa = ones(size(A_roa,1)) + A_roa*fp
-reg_roa = HPolytope(constraints_list(A_roa, b_roa))
+# fp = [-1.089927713157323, -0.12567755953751042]
+# A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
+# b_roa = ones(size(A_roa,1)) + A_roa*fp
+# reg_roa = HPolytope(constraints_list(A_roa, b_roa))
 
 # Run algorithm
-# @time begin
-# state2input, state2output, state2map, state2backward, state2neighbors = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], graph=true)
+@time begin
+state2input, state2output, state2map, state2backward, state2neighbors = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], graph=true)
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
-# end
-# @show length(state2input)
+end
+@show length(state2input)
 # @show length(state2backward[1])
+
+
+# save pwa map 
+save("models/taxinet/taxinet_pwa_map_large.jld2", Dict("state2map" => state2map, "state2input" => state2input, "state2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 # Plot all regions #
@@ -82,8 +87,8 @@ reg_roa = HPolytope(constraints_list(A_roa, b_roa))
 
 
 # determine if function is a homeomorphism
-# homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
-# println("PWA function is a homeomorphism: ", homeomorph)
+homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
+println("PWA function is a homeomorphism: ", homeomorph)
 
 
 # find any fixed points if they exist
@@ -100,8 +105,6 @@ reg_roa = HPolytope(constraints_list(A_roa, b_roa))
 
 
 
-# save pwa map 
-# save("models/taxinet/taxinet_pwa_map.jld2", Dict("state2map" => state2map, "state2input" => state2input, "state2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 # Load in saved function #
 # pwa_dict = load("models/taxinet/taxinet_pwa_map.jld2")
