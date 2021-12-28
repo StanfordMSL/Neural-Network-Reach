@@ -75,7 +75,7 @@ end
 
 
 # save pwa map 
-save("models/taxinet/taxinet_pwa_map_large.jld2", Dict("state2map" => state2map, "state2input" => state2input, "state2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
+save("models/taxinet/taxinet_pwa_map_large.jld2", Dict("ap2map" => state2map, "ap2input" => state2input, "ap2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 # Plot all regions #

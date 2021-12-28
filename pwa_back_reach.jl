@@ -4,6 +4,7 @@ We can't use other implementations, such as from MPT, because they don't take ad
 the homeomorphic property of the PWA function.
 
 I use the following polytopic ROA as my 0-step brs
+fp = [-1.089927713157323, -0.12567755953751042]
 A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
 b_roa = ones(size(A_roa,1)) + A_roa*fp
 out_set = Set{Tuple{Matrix{Float64},Vector{Float64}}}([(A_roa, b_roa)])
@@ -28,20 +29,23 @@ function merge_polytopes(polytopes::Set{ Tuple{Matrix{Float64}, Vector{Float64}}
 	end 
 	As_mat = mxarray(As)
 	bs_mat = mxarray(bs)
+	println("Here 0")
 
 	# interface with Matlab MPT merge() method for PolyUnion objects
 	# optimal merging creates a polytopic covering an hence we set overlaps to true.
 	mat"""
+	disp('Here 0.5')
+	abc = mptopt('lpsolver', 'GLPK');
 	clear P;
 	clear U;
 	clear merged;
 	for i = 1:length($As_mat)
 		P(i) = Polyhedron($As_mat{i}, $bs_mat{i});
 	end
-
+	disp('Here 1')
 	U = PolyUnion('Set',P,'convex',false,'overlaps',true,'Connected',true,'fulldim',true,'bounded',true);
 	merged = U.merge('optimal', true);
-
+	disp('Here 2')
 	$len_m = length(merged.Set);
 	$As_merged = cell($len_m,1);
 	$bs_merged = cell($len_m,1);
@@ -108,17 +112,13 @@ This function computes an i-step BRS, given a saved (i-1)-step step BRS.
 merge flag controls whether BRS polytopes are merged before returning result.
 save flag controls whether the resulting i-step BRS is saved to file
 =#
-function backward_reach(i; merge=false, Save=false, verbose=false)
+function backward_reach(pwa_dict, i; merge=false, optMerge=false, Save=false, verbose=false)
 	verbose ? println("Computing ", i, "-step BRS.") : nothing
 
-	# load in PWA function
-	pwa_dict = load("models/taxinet/taxinet_pwa_map.jld2")
+	# load in homeomorphic PWA function
 	ap2map = pwa_dict["ap2map"]
 	ap2input = pwa_dict["ap2input"]
 	ap2neighbors = pwa_dict["ap2neighbors"]
-
-	# define the fixed point
-	fp = [-1.089927713157323, -0.12567755953751042]
 
 	# load in set to find preimage of
 	if merge
@@ -163,8 +163,8 @@ function backward_reach(i; merge=false, Save=false, verbose=false)
 		end
 	end
 
-	# merge polytopes in BRS
-	if merge && length(brs_polytopes) > 1
+	# optimal merging of polytopes in BRS
+	if optMerge && length(brs_polytopes) > 1
 		brs_polytopes = merge_polytopes(brs_polytopes; verbose=verbose)
 	end
 
@@ -197,6 +197,7 @@ end
 
 
 
+# save("models/taxinet/taxinet_pwa_map_large.jld2", Dict("ap2map" => ap2map, "ap2input" => ap2input, "ap2neighbors" => ap2neighbors, "ap_fp" => ap_fp, "fp" => fp, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 
@@ -213,10 +214,39 @@ end
 
 
 ### Scripting ###
-## To compute one step ##
-# brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(6; merge=true, Save=false, verbose=true)
-# plot_polytopes(brs_polytopes)
+# pwa_dict = load("models/taxinet/taxinet_pwa_map_large.jld2")
+# start_steps = 136
+# end_steps = 136
+# stats = load("models/taxinet/BRS_merge/stats.jld2")
+# times = stats["times"]
+# poly_counts = stats["poly_counts"]
+# Save = true
+# Merge = true
+# optMerge = true
 
+# # To compute multiple steps #
+# for i in start_steps:end_steps
+# 	println("\n")
+# 	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(pwa_dict, i; merge=Merge, optMerge=optMerge, Save=Save, verbose=true)
+	
+# 	if length(times) == length(poly_counts)
+# 		if i ≤ length(times)
+# 			times[i] = t
+# 			poly_counts[i] = length(brs_polytopes)
+# 		elseif i == length(times)+1
+# 			push!(times, t)
+# 			push!(poly_counts, length(brs_polytopes))
+# 		end
+# 	end
+
+# 	Save ? save("models/taxinet/BRS_merge/stats.jld2", Dict("times" => times, "poly_counts" => poly_counts)) : nothing
+# end
+
+
+
+# To compute one step #
+# brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(pwa_dict, 6; merge=true, Save=false, verbose=true)
+# plt = plot_polytopes(brs_polytopes)
 
 
 
@@ -250,12 +280,12 @@ end
 
 
 ## To plot a BRS ##
-# merge = false
-# i = 100
-# if merge
-# 	brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"))
-# else
-# 	brs_dict = load(string("models/taxinet/BRS_no_merge/taxinet_brs_", i, "_step.jld2"))
-# end
-# output_polytopes = brs_dict["brs"]
-# plt = plot_polytopes(output_polytopes)
+merge = true
+i = 135
+if merge
+	brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"))
+else
+	brs_dict = load(string("models/taxinet/BRS_no_merge/taxinet_brs_", i, "_step.jld2"))
+end
+output_polytopes = brs_dict["brs"]
+plt = plot_polytopes(output_polytopes)
