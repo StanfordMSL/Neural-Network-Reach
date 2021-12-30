@@ -6,8 +6,9 @@ include("invariance.jl")
 function input_constraints_taxinet(weights)
 	A = [1. 0.; -1. 0.; 0. 1.; 0. -1.]
 	# b = [0.05, 0.05, 0.05, 0.05]
-	# b = [5.0, 5.0, 2.3, 2.3]
-	b = [10., 10., 2., 2.] # +- 10 meters, +- 2 degrees
+	# b = [5.0, 5.0, 2.3, 2.3] # taxinet_pwa_map.jld
+	# b = [10., 10., 2., 2.]   # taxinet_pwa_map_large.jld +- 10 meters, +- 2 degrees
+	# b = [11., 11., 30., 30.]     # taxinet_pwa_map_full.jld  +- 10 meters, +- 2 degrees
 	# b = [-1.0, 1.11, 0.01, 0.8]
 	# b = [11., 11., 30., 30.]
 	return A, b
