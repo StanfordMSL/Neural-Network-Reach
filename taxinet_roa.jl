@@ -8,7 +8,7 @@ function input_constraints_taxinet(weights)
 	# b = [0.05, 0.05, 0.05, 0.05]
 	# b = [5.0, 5.0, 2.3, 2.3] # taxinet_pwa_map.jld
 	# b = [10., 10., 2., 2.]   # taxinet_pwa_map_large.jld +- 10 meters, +- 2 degrees
-	# b = [11., 11., 30., 30.]     # taxinet_pwa_map_full.jld  +- 10 meters, +- 2 degrees
+	# b = [11., 11., 30., 30.]  # taxinet_pwa_map_full.jld  +- 10 meters, +- 2 degrees
 	# b = [-1.0, 1.11, 0.01, 0.8]
 	# b = [11., 11., 30., 30.]
 	return A, b
@@ -27,7 +27,7 @@ function plot_hrep_taxinet(state2constraints; type="normal")
 	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
 	for state in keys(state2constraints)
 		A, b = state2constraints[state]
-		reg = HPolytope(constraints_list(A, b))
+		reg = HPolytope(A, b)
 	
 		if isempty(reg)
 			@show reg
@@ -64,7 +64,7 @@ Aₒ, bₒ = output_constraints_taxinet(weights)
 # fp = [-1.089927713157323, -0.12567755953751042]
 # A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
 # b_roa = ones(size(A_roa,1)) + A_roa*fp
-# reg_roa = HPolytope(constraints_list(A_roa, b_roa))
+# reg_roa = HPolytope(A_roa, b_roa)
 
 # Run algorithm
 @time begin
