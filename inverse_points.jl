@@ -1,4 +1,5 @@
 using LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, FileIO, Plots, Distributions
+include("load_networks.jl")
 # pyplot()
 
 # generate uniform random real vector on the unit sphere
@@ -109,35 +110,68 @@ pwa_dict = load("models/taxinet/taxinet_pwa_map_large.jld2")
 ap2map = pwa_dict["ap2map"]
 ap2input = pwa_dict["ap2input"]
 ap2neighbors = pwa_dict["ap2neighbors"]
+weights = taxinet_cl(1)
+# eval_net(input, weights, steps)
 
-
-
-# collect perimeter points of seed ROA
+# define seed ROA #
 fp = [-1.089927713157323, -0.12567755953751042]
 A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
 b_roa = ones(size(A_roa,1)) + A_roa*fp
-
 Hrep = HPolytope(constraints_list(A_roa, b_roa))
-Vrep = tovrep(Hrep)
 
-n = 100_000
+
+# sample space around seed ROA #
+N = 1_000
 Xs = Vector{Vector{Vector{Float64}}}(undef, 2)
-Xs[1] = sample_perimeter(A_roa, b_roa, Vrep.vertices, n, tol = 1e-3)
+Xs[1] = [[bound_r(-2,0), bound_r(-0.25,0.0)] for _ in 1:N]
 Xs[2] = Xs[1]
-println(length(Xs[1]), " perimeter points")
 
 
 # compute inverse points
-steps = 227 # 227 is max for taxinet_pwa_map_large.jld2
+steps = 24 # 227 is max for taxinet_pwa_map_large.jld2
 for i in 2:steps+1
 	println("Inverse step: ", i-1)
 	Xs[2] = inverse_map(ap2map, ap2input, Xs[2])
 end
 
+
+# split into points originating from roa and those not #
+
+
 # plot starting and ending points
 plt1 = plot(Hrep, reuse=false, label=false)
 scatter!(plt1, hcat(Xs[1]...)'[:,1], hcat(Xs[1]...)'[:,2], label=false)
 scatter!(plt1, hcat(Xs[2]...)'[:,1], hcat(Xs[2]...)'[:,2], label=string(steps, "-step"))
+
+
+
+
+# # collect perimeter points of seed ROA
+# fp = [-1.089927713157323, -0.12567755953751042]
+# A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
+# b_roa = ones(size(A_roa,1)) + A_roa*fp
+
+# Hrep = HPolytope(constraints_list(A_roa, b_roa))
+# Vrep = tovrep(Hrep)
+
+# n = 100_000
+# Xs = Vector{Vector{Vector{Float64}}}(undef, 2)
+# Xs[1] = sample_perimeter(A_roa, b_roa, Vrep.vertices, n, tol = 1e-3)
+# Xs[2] = Xs[1]
+# println(length(Xs[1]), " perimeter points")
+
+
+# # compute inverse points
+# steps = 227 # 227 is max for taxinet_pwa_map_large.jld2
+# for i in 2:steps+1
+# 	println("Inverse step: ", i-1)
+# 	Xs[2] = inverse_map(ap2map, ap2input, Xs[2])
+# end
+
+# # plot starting and ending points
+# plt1 = plot(Hrep, reuse=false, label=false)
+# scatter!(plt1, hcat(Xs[1]...)'[:,1], hcat(Xs[1]...)'[:,2], label=false)
+# scatter!(plt1, hcat(Xs[2]...)'[:,1], hcat(Xs[2]...)'[:,2], label=string(steps, "-step"))
 
 # save point set
 # save(string("models/taxinet/point_set_", steps, "_", length(Xs[1]), ".jld2"), Dict("perim_small" => Xs[1], "perim_large" => Xs[2]))

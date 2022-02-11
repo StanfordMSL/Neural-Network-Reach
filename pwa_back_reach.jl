@@ -41,7 +41,7 @@ end
 
 # Plot union of polytopes
 function plot_polytopes(polytopes)
-	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
+	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂", xlims=[-1.175, -1.0], ylims=[-0.5, 0.2])
 	for (A, b) in polytopes
 		reg = HPolytope(constraints_list(A, b))
 		if isempty(reg)
@@ -228,7 +228,7 @@ end
 
 ## To plot a BRS ##
 merge = true
-i = 135
+i = 1
 if merge
 	brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"))
 else
@@ -236,3 +236,4 @@ else
 end
 output_polytopes = brs_dict["brs"]
 plt = plot_polytopes(output_polytopes)
+# savefig(plt, string(i, ".png"))

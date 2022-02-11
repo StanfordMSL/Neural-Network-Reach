@@ -628,9 +628,6 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		ap2input[ap] = (A, b)
 		
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
-		# if i == 20
-		# 	break
-		# end
 	end
 	verification ? println("No input maps to the target set.") : nothing
 	println("Rank deficient maps: ", rank_deficient)

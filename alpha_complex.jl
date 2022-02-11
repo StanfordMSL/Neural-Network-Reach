@@ -1,5 +1,6 @@
 using LinearAlgebra, LazySets, Polyhedra, AlphaStructures, FileIO, Plots
 include("merge_poly.jl")
+include("inverse_points.jl")
 include("load_networks.jl")
 # pyplot()
 
@@ -16,7 +17,7 @@ Xs = perim_dict["perim_large"]
 filtration = AlphaStructures.alphaFilter(hcat(Xs...))
 
 # FV gives tuples of 3 vertices defining my simplices
-VV,EV,FV = AlphaStructures.alphaSimplex(hcat(Vrep.vertices...),filtration, Float64(α))
+VV,EV,FV = AlphaStructures.alphaSimplex(hcat(Xs...),filtration, Float64(α))
 
 # Get set of simplices in Vrep
 simplices = Vector{Matrix{Float64}}(undef, length(FV))
@@ -25,7 +26,7 @@ for i in 1:length(simplices)
 end
 
 plt2 = plot(reuse=false)
-scatter!(plt2, hcat(Xs...)'[:,1], hcat(Xs...)'[:,2], label=string(steps, "-step"))
+scatter!(plt2, hcat(Xs...)'[:,1], hcat(Xs...)'[:,2])
 for s in simplices
 	plot!(plt2, VPolytope(s), label=false)
 end

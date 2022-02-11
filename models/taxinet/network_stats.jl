@@ -43,7 +43,7 @@ W_gen_est = nnet_load("models/taxinet/full_mlp_supervised_2input_0.nnet") # x ->
 W_gen_4in = nnet_load("models/taxinet/full_mlp_supervised.nnet") # [z; x] -> x_est
 W_dyn =  pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm_params_dynamics.npz", 1) # [u; x] -> x′
 W_ux = taxinet_2input_resid() # x -> [u; x]
-W_cl = taxinet_cl()
+W_cl = taxinet_cl(1)
 
 # latent variable that gives best tracking to centerline
 # z = [0, 0]
@@ -71,8 +71,14 @@ m = 1500
 
 
 # Plot closed-loop NN trajectories
-plt3 = plot(reuse=false, legend=false, xlabel="Downtrack Position (m.)", ylabel="x₁: Crosstrack Position (m.)")
-for ii = -9:9
+# plt3 = plot(reuse=false, legend=false, xlabel="Downtrack Position (m.)", ylabel="x₁: Crosstrack Position (m.)")
+plt3 = plot(reuse=false, legend=false, size=(692,195), xaxis=false)
+plot!(plt3, Shape([(130,10),(130,-10),(0,-10),(0,10)]), color="gray68")
+plot!(plt3, Shape([(130,20),(130,10),(0,10),(0,20)]), color="darkseagreen2")
+plot!(plt3, Shape([(130,-10),(130,-20),(0,-20),(0,-10)]), color="darkseagreen2")
+hline!(plt3, [0; 120], [0.0], color="white", line=:dash)
+hline!(plt3, [0; 120], [10.0, -10.0], color="black", linewidth=2, xlims=[0, 120])
+for ii = -8:2:8
 	xₒ = [ii, 0.0, 0.0]
 	traj_nn = Matrix{Float64}(undef, 3, m) # [crosstrack position, heading error, downtrack position]
 	traj_nn[:,1] = xₒ
@@ -81,9 +87,10 @@ for ii = -9:9
 		d′ = traj_nn[3, i-1] + 5*0.05*cosd(traj_nn[2, i-1])
 		traj_nn[:,i] = [x′; d′]
 	end
-	@show traj_nn[:,end]
-	plot!(plt3, traj_nn[3,:], traj_nn[1,:], xlims=[0, 120], ylims=[-10, 10])
+	# @show traj_nn[:,end]
+	plot!(plt3, traj_nn[3,:], traj_nn[1,:], xlims=[0, 120], ylims=[-11, 11], color="blue")
 end
+
 
 
 plt3

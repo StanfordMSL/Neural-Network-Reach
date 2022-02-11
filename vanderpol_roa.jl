@@ -83,29 +83,30 @@ end
 # ⋅ compute invariant polytopes around the fixed points
 # ⋅ perform backwards reachability to estimate the maximal region of attraction in the domain
 
-copies = 1 # copies = 1 is original network
+copies = 10 # copies = 1 is original network
 nn_weights = "models/vanderpol/weights.npz"
 nn_params = "models/vanderpol/norm_params.npz"
 weights = pytorch_net(nn_weights, nn_params, copies)
 
 
-# Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box")
-# Aₒ, bₒ = output_constraints_vanderpol(weights, "origin")
-# A_roa = Matrix{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["A_roa"])
-# b_roa = Vector{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["b_roa"])
+Aᵢ, bᵢ = input_constraints_vanderpol(weights, "box")
+Aₒ, bₒ = output_constraints_vanderpol(weights, "origin")
+A_roa = Matrix{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["A_roa"])
+b_roa = Vector{Float64}(matread("models/vanderpol/vanderpol_seed.mat")["b_roa"])
+fp = matread("models/vanderpol/vanderpol_seed.mat")["fp"]
 
 # Run algorithm
-# @time begin
+@time begin
 # state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa])
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
-# end
-# @show length(state2input)
-# @show length(state2backward[1])
+state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=false)
+end
+@show length(state2input)
+@show length(state2backward[1])
 
 
 # Plot all regions #
 # plt_in1  = plot_hrep_vanderpol(state2input)
-# plt_in2  = plot_hrep_vanderpol(state2backward[1])
+plt_in2  = plot_hrep_vanderpol(state2backward[1])
 
 # homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
 # println("PWA function is a homeomorphism: ", homeomorph)
@@ -116,12 +117,38 @@ weights = pytorch_net(nn_weights, nn_params, copies)
 
 
 # Getting mostly suboptimal SDP here
-A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("vanderpol", nn_weights, 20, 7, nn_params=nn_params)
-@show plt_in2
+# A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("vanderpol", nn_weights, 20, 7, nn_params=nn_params)
+# @show plt_in2
 # 10 steps is ~35k polytopes with ~300 polytopes in the BRS
 # 15 steps is 88,500 polytopes with 895 polytopes in the BRS
 # algorithm does ~1000 polytopes per minute.
 # Create gif of backward reachable set
 # BRS_gif(nn_weights, nn_params, Aᵢ, bᵢ, A_roa, b_roa, 5)
 # nothing
+
+
+
+# overplot van der Pol limit cycle
+RK_f(S) = [-S[2], S[1] + S[2]*(S[1]^2 - 1)] # reverse time. ROA is a nonconvex subset of a square of +- 3 around the origin
+
+function RK_update(S, dt)
+	k1 = RK_f(S)
+	k2 = RK_f(S + dt*0.5*k1)
+	k3 = RK_f(S + dt*0.5*k2)
+	k4 = RK_f(S + dt*k3)
+	return S + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
+end
+
+function rollout(x0, steps, dt)
+	traj = Matrix{Float64}(undef, steps, 2)
+	traj[1,:] = x0
+	for i in 2:steps
+		traj[i,:] = RK_update(traj[i-1,:], dt)
+	end
+	return traj
+end
+
+traj = rollout([-2.0086212, 0.0], 135, 0.05)
+plot!(plt_in2, traj[:,1], traj[:,2], xlims=(-2.5, 2.5), ylims=(-3, 3), label=false, color="blue")
+
 
