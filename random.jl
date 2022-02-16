@@ -66,5 +66,5 @@ ap2vertices = get_vrep(ap2input)
 # Plot all regions (only 2D input) #
 plt_in  = plot_hrep_random(ap2input, space="input")
 
-using FileIO
-save("models/random/rand1.jld2", Dict("ap2input" => ap2input, "ap2vertices" => ap2vertices, "ap2map" => ap2map, "weights" => weights))
+# using FileIO
+# save("models/random/rand1.jld2", Dict("ap2input" => ap2input, "ap2vertices" => ap2vertices, "ap2map" => ap2map, "weights" => weights))

@@ -41,7 +41,9 @@ end
 
 # Plot union of polytopes
 function plot_polytopes(polytopes)
-	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂", xlims=[-1.175, -1.0], ylims=[-0.5, 0.2])
+	# plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂", xlims=[-1.175, -1.0], ylims=[-0.5, 0.2])
+	plt = plot(reuse = false, legend=false, xlabel="x₁", ylabel="x₂")
+
 	for (A, b) in polytopes
 		reg = HPolytope(constraints_list(A, b))
 		if isempty(reg)
@@ -59,7 +61,7 @@ This function computes an i-step BRS, given a saved (i-1)-step step BRS.
 merge flag controls whether BRS polytopes are merged before returning result.
 save flag controls whether the resulting i-step BRS is saved to file
 =#
-function backward_reach(pwa_dict, i; merge=false, optMerge=false, Save=false, verbose=false)
+function backward_reach(pwa_dict, i, merge; Save=false, verbose=false)
 	verbose ? println("Computing ", i, "-step BRS.") : nothing
 
 	# load in homeomorphic PWA function
@@ -68,10 +70,14 @@ function backward_reach(pwa_dict, i; merge=false, optMerge=false, Save=false, ve
 	ap2neighbors = pwa_dict["ap2neighbors"]
 
 	# load in set to find preimage of
-	if merge
+	if merge == "overlap"
 		brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i-1, "_step.jld2"))
-	else
+	elseif merge == "no_overlap"
+		brs_dict = load(string("models/taxinet/BRS_merge_no_overlap/taxinet_brs_", i-1, "_step.jld2"))
+	elseif merge == "no_merge"
 		brs_dict = load(string("models/taxinet/BRS_no_merge/taxinet_brs_", i-1, "_step.jld2"))
+	else
+		error("merge input must be from : overlap, no_overlap, no_merge")
 	end
 	output_polytopes = brs_dict["brs"]
 
@@ -111,16 +117,20 @@ function backward_reach(pwa_dict, i; merge=false, optMerge=false, Save=false, ve
 	end
 
 	# optimal merging of polytopes in BRS
-	if optMerge && length(brs_polytopes) > 1
+	if (merge == "overlap" || merge == "no_overlap") && length(brs_polytopes) > 1
 		brs_polytopes = merge_polytopes(brs_polytopes; verbose=verbose)
 	end
 
 	# save the i-step brs
 	if Save
-		if merge
+		if merge == "overlap"
 			save(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
-		else
+		elseif merge == "no_overlap"
+			save(string("models/taxinet/BRS_merge_no_overlap/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
+		elseif merge == "no_merge"
 			save(string("models/taxinet/BRS_no_merge/taxinet_brs_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
+		else
+			error("merge input must be from : overlap, no_overlap, no_merge")
 		end
 	end
 
@@ -161,33 +171,52 @@ end
 
 
 ### Scripting ###
-# pwa_dict = load("models/taxinet/taxinet_pwa_map_large.jld2")
-# start_steps = 136
-# end_steps = 136
-# stats = load("models/taxinet/BRS_merge/stats.jld2")
-# times = stats["times"]
-# poly_counts = stats["poly_counts"]
-# Save = true
-# Merge = true
-# optMerge = true
+pwa_dict = load("models/taxinet/taxinet_pwa_map_large.jld2")
+start_steps = 51
+end_steps = 55
 
-# # To compute multiple steps #
-# for i in start_steps:end_steps
-# 	println("\n")
-# 	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(pwa_dict, i; merge=Merge, optMerge=optMerge, Save=Save, verbose=true)
+# times, poly_counts = Vector{Float64}(undef, 0), Vector{Int64}(undef, 0)
+Save = true
+Merge = "no_overlap"
+
+if Merge == "overlap"
+	stats = load("models/taxinet/BRS_merge/stats.jld2")
+elseif Merge == "no_overlap"
+	stats = load("models/taxinet/BRS_merge_no_overlap/stats.jld2")
+elseif Merge == "no_merge"
+	stats = load("models/taxinet/BRS_no_merge/stats.jld2")
+end
+
+
+times = stats["times"]
+poly_counts = stats["poly_counts"]
+
+# To compute multiple steps #
+for i in start_steps:end_steps
+	println("\n")
+	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(pwa_dict, i, Merge; Save=Save, verbose=true)
 	
-# 	if length(times) == length(poly_counts)
-# 		if i ≤ length(times)
-# 			times[i] = t
-# 			poly_counts[i] = length(brs_polytopes)
-# 		elseif i == length(times)+1
-# 			push!(times, t)
-# 			push!(poly_counts, length(brs_polytopes))
-# 		end
-# 	end
+	if length(times) == length(poly_counts)
+		if i ≤ length(times)
+			times[i] = t
+			poly_counts[i] = length(brs_polytopes)
+		elseif i == length(times)+1
+			push!(times, t)
+			push!(poly_counts, length(brs_polytopes))
+		end
+	end
 
-# 	Save ? save("models/taxinet/BRS_merge/stats.jld2", Dict("times" => times, "poly_counts" => poly_counts)) : nothing
-# end
+	if Save
+		if Merge == "overlap"
+			save("models/taxinet/BRS_merge/stats.jld2", Dict("times" => times, "poly_counts" => poly_counts))
+		elseif Merge == "no_overlap"
+			save("models/taxinet/BRS_merge_no_overlap/stats.jld2", Dict("times" => times, "poly_counts" => poly_counts))
+		elseif Merge == "no_merge"
+			save("models/taxinet/BRS_no_merge/stats.jld2", Dict("times" => times, "poly_counts" => poly_counts))
+		end
+	end
+	println("total time: ", t)
+end
 
 
 
@@ -200,18 +229,18 @@ end
 
 
 
-## To compute multiple steps ##
-# max_steps = 100
+# ## To compute multiple steps ##
+# max_steps = 3
 # times = Matrix{Float64}(undef, max_steps, 2)
 # poly_counts = Matrix{Int64}(undef, max_steps, 2)
 
 # for i in 1:max_steps
 # 	println("\n")
 # 	# compute brs union of polytopes
-# 	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(i; merge=false, Save=true, verbose=true)
+# 	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(i, "no_merge", Save=false, verbose=true)
 # 	times[i,1], poly_counts[i,1] = t, length(brs_polytopes)
 
-# 	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(i; merge=true, Save=true, verbose=true)
+# 	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(i, "no_overlap", Save=true, verbose=true)
 # 	times[i,2], poly_counts[i,2] = t, length(brs_polytopes)
 
 # 	# plot brs
@@ -227,13 +256,18 @@ end
 
 
 ## To plot a BRS ##
-merge = true
-i = 1
-if merge
-	brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"))
-else
-	brs_dict = load(string("models/taxinet/BRS_no_merge/taxinet_brs_", i, "_step.jld2"))
-end
-output_polytopes = brs_dict["brs"]
-plt = plot_polytopes(output_polytopes)
+# merge = "no_overlap"
+# i = 50
+# if merge == "overlap"
+# 	brs_dict = load(string("models/taxinet/BRS_merge/taxinet_brs_", i, "_step.jld2"))
+# elseif merge == "no_overlap"
+# 	brs_dict = load(string("models/taxinet/BRS_merge_no_overlap/taxinet_brs_", i, "_step.jld2"))
+# elseif merge == "no_merge"
+# 	brs_dict = load(string("models/taxinet/BRS_no_merge/taxinet_brs_", i, "_step.jld2"))
+# else
+# 	error("merge input must be from : overlap, no_overlap, no_merge")
+# end
+# output_polytopes = brs_dict["brs"]
+# plt = plot_polytopes(output_polytopes)
+
 # savefig(plt, string(i, ".png"))

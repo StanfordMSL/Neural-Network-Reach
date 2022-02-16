@@ -7,10 +7,20 @@ function sample_forward(weights, N, X1, X2, reg_roa)
 	# check if initial condition gets to roa in N time steps
 	for (i, x₁) in enumerate(X1)
 		for (j, x₂) in enumerate(X2)
-			if eval_net([x₁, x₂], weights, N) ∉ reg_roa
-				push!(unconverged, (i, j))
-			else
-				push!(converged, (i, j))
+			x′ = [x₁, x₂]
+			for k in 1:N
+				x′ = eval_net(x′, weights, 1)
+				in_domain = all(x′ .≤ maximum.([X1, X2])) && all(x′ .≥ minimum.([X1, X2]))
+
+				if !in_domain
+					push!(unconverged, (i,j))
+					break
+				elseif k == N && x′ ∉ reg_roa
+					push!(unconverged, (i, j))
+				elseif k == N
+					push!(converged, (i, j))
+				end
+
 			end
 		end
 	end
@@ -35,10 +45,10 @@ function reconstruct(converged, unconverged, N, X1, X2)
 end
 
 function run_trials()
-	X1 = -10:.1:10
-	X2 = -30:.2:30
+	X1 = -5:.1:5
+	X2 = -15:.2:15
 	results = Dict() # Dict of time-step -> converged, unconverged data
-	for N in 25:25:1000
+	for N in 50:50:1000
 		converged, unconverged = sample_forward(weights, N, X1, X2, reg_roa)
 		results[string(N)] = (converged, unconverged)
 	end
@@ -58,14 +68,14 @@ reg_roa = HPolytope(A_roa, b_roa)
 
 
 # large trials
-# results, X1, X2 = run_trials()
-# save("models/taxinet/sample_roas.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
+results, X1, X2 = run_trials()
+save("models/taxinet/sample_roas_2.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
 
-# sample_dict = load("models/taxinet/sample_roas.jld2")
+# sample_dict = load("models/taxinet/sample_roas_2.jld2")
 # results = sample_dict["results"]
 # X1, X2 = sample_dict["X1"], sample_dict["X2"]
 
-# N = 950
+# N = 400
 # converged, unconverged = results[string(N)]
 
 # plt = reconstruct(converged, unconverged, N, X1, X2)
