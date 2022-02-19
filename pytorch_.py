@@ -110,8 +110,8 @@ else:                         device = torch.device("cpu")
 # X = numpy.load("models/taxinet/Y_image.npy")
 # Y = numpy.load("models/taxinet/X_image.npy")
 
-X = numpy.load("models/taxinet/X_dynamics.npy")
-Y = numpy.load("models/taxinet/Y_dynamics.npy")
+X = numpy.load("models/taxinet/X_dynamics_5hz.npy")
+Y = numpy.load("models/taxinet/Y_dynamics_5hz.npy")
 
 # X = numpy.load("models/Pendulum/X_controlled.npy")
 # Y = numpy.load("models/Pendulum/Y_controlled.npy")
@@ -164,8 +164,8 @@ for name, param in model.named_parameters():
 
     
 # save weights and normalization parameters
-numpy.savez("models/taxinet/weights_dynamics.npz", *weights)
-numpy.savez("models/taxinet/norm_params_dynamics.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+numpy.savez("models/taxinet/weights_dynamics_5hz.npz", *weights)
+numpy.savez("models/taxinet/norm_params_dynamics_5hz.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
 # numpy.savez("models/" + dynamics + "/weights.npz", *weights)
 # numpy.savez("models/" + dynamics + "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)

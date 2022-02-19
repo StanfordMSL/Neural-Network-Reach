@@ -8,7 +8,9 @@ function input_constraints_taxinet(weights)
 	# b = [0.05, 0.05, 0.05, 0.05]
 	# b = [5.0, 5.0, 2.3, 2.3] # taxinet_pwa_map.jld
 	# b = [10., 10., 2., 2.]   # taxinet_pwa_map_large.jld +- 10 meters, +- 2 degrees
-	# b = [11., 11., 30., 30.]  # taxinet_pwa_map_full.jld  +- 10 meters, +- 2 degrees
+	b = [5., 5., 15., 15.]   # taxinet_pwa_map_5_15.jld +- 5 meters, +- 15 degrees
+	# b = [11., 11., 30., 30.] # taxinet_pwa_map_full.jld  +- 10 meters, +- 30 degrees
+
 	# b = [-1.0, 1.11, 0.01, 0.8]
 	# b = [11., 11., 30., 30.]
 	return A, b
@@ -76,7 +78,7 @@ end
 
 
 # save pwa map 
-save("models/taxinet/taxinet_pwa_map_large.jld2", Dict("ap2map" => state2map, "ap2input" => state2input, "ap2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
+save("models/taxinet/taxinet_pwa_map_5_15.jld2", Dict("ap2map" => state2map, "ap2input" => state2input, "ap2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 # Plot all regions #

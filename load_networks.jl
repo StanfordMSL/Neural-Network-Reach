@@ -240,7 +240,7 @@ end
 # Need to change
 function taxinet_cl(copies::Int64)
 	net_a = taxinet_2input_resid() # x -> [u; x]
-	net_b = pytorch_net("models/taxinet/weights_dynamics.npz", "models/taxinet/norm_params_dynamics.npz", 1) # [u; x] -> x′
+	net_b = pytorch_net("models/taxinet/weights_dynamics_5hz.npz", "models/taxinet/norm_params_dynamics_5hz.npz", 1) # [u; x] -> x′
 
 	len_a = length(net_a)
 	len_b = length(net_b)

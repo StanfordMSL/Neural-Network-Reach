@@ -68,17 +68,17 @@ reg_roa = HPolytope(A_roa, b_roa)
 
 
 # large trials
-results, X1, X2 = run_trials()
-save("models/taxinet/sample_roas_2.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
+# results, X1, X2 = run_trials()
+# save("models/taxinet/sample_roas_2.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
 
-# sample_dict = load("models/taxinet/sample_roas_2.jld2")
-# results = sample_dict["results"]
-# X1, X2 = sample_dict["X1"], sample_dict["X2"]
+sample_dict = load("models/taxinet/sample_roas_2.jld2")
+results = sample_dict["results"]
+X1, X2 = sample_dict["X1"], sample_dict["X2"]
 
-# N = 400
-# converged, unconverged = results[string(N)]
+N = 1000
+converged, unconverged = results[string(N)]
 
-# plt = reconstruct(converged, unconverged, N, X1, X2)
+plt = reconstruct(converged, unconverged, N, X1, X2)
 
 
 
