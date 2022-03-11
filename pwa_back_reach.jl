@@ -172,8 +172,8 @@ end
 
 ### Scripting ###
 pwa_dict = load("models/taxinet/taxinet_pwa_map_large.jld2")
-start_steps = 51
-end_steps = 55
+start_steps = 1
+end_steps = 3
 
 # times, poly_counts = Vector{Float64}(undef, 0), Vector{Int64}(undef, 0)
 Save = true
