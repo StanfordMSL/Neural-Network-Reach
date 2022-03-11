@@ -77,7 +77,7 @@ end
 # @show length(state2backward[1])
 
 
-# save pwa map 
+# save pwa map
 save("models/taxinet/taxinet_pwa_map_5_15.jld2", Dict("ap2map" => state2map, "ap2input" => state2input, "ap2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 

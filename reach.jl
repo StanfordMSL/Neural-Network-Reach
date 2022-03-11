@@ -562,7 +562,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	ap2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
 	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
-	ap2neighbors = Dict{Vector{BitVector}, Vector{Vector{BitVector}}}() # Dict from ap to neuron indices we know are essential
+	ap2neighbors = Dict{Vector{BitVector}, Vector{Vector{BitVector}}}() # Dict from ap to vector of neighboring aps
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 	# Initialize algorithm #
 	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell

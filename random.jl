@@ -14,7 +14,7 @@ function input_constraints_random(weights, type::String)
 		Aᵢ_pos = Matrix{Float64}(I, in_dim, in_dim)
 		Aᵢ_neg = Matrix{Float64}(-I, in_dim, in_dim)
 		Aᵢ = vcat(Aᵢ_pos, Aᵢ_neg)
-		bᵢ = 5*ones(2*in_dim)
+		bᵢ = 2*ones(2*in_dim)
 	elseif type == "hexagon"
 		Aᵢ = [1. 0.; -1. 0.; 0. 1.; 0. -1.; 1. 1.; -1. 1.; 1. -1.; -1. -1.]
 		bᵢ = [5., 5., 5., 5., 8., 8., 8., 8.]
@@ -51,7 +51,9 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-weights = random_net(2, 2, 10, 2) # (in_d, out_d, hdim, layers)
+in_d, out_d, hdim, layers = 2, 1, 10, 3
+weights = random_net(in_d, out_d, hdim, layers) 
+
 Aᵢ, bᵢ = input_constraints_random(weights, "box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
@@ -61,10 +63,16 @@ ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [A
 end
 @show length(ap2input)
 
-ap2vertices = get_vrep(ap2input)
+
 
 # Plot all regions (only 2D input) #
 plt_in  = plot_hrep_random(ap2input, space="input")
+
+
+
+
+
+
 
 # using FileIO
 # save("models/random/rand1.jld2", Dict("ap2input" => ap2input, "ap2vertices" => ap2vertices, "ap2map" => ap2map, "weights" => weights))
