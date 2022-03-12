@@ -21,6 +21,7 @@ function merge_polytopes(polytopes::Set{ Tuple{Matrix{Float64}, Vector{Float64}}
 	# interface with Matlab MPT merge() method for PolyUnion objects
 	# optimal merging creates a polytopic covering an hence we set overlaps to true.
 	mat"""
+	addpath(genpath('../tbxmanager/toolboxes'));
 	temp = mptopt('lpsolver', 'GLPK');
 	clear P;
 	clear U;
