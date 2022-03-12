@@ -60,7 +60,7 @@ copies = 1 # copies = 1 is original network
 weights = taxinet_cl(copies)
 
 Aᵢ, bᵢ = input_constraints_taxinet(weights)
-Aₒ, bₒ = output_constraints_taxinet(weights)
+# Aₒ, bₒ = output_constraints_taxinet(weights)
 
 # Already found fixed point and seed ROA
 # fp = [-1.089927713157323, -0.12567755953751042]
@@ -69,41 +69,73 @@ Aₒ, bₒ = output_constraints_taxinet(weights)
 # reg_roa = HPolytope(A_roa, b_roa)
 
 # Run algorithm
-@time begin
-state2input, state2output, state2map, state2backward, state2neighbors = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], graph=true)
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
-end
-@show length(state2input)
-# @show length(state2backward[1])
+# @time begin
+# ap2input, ap2output, ap2map, ap2backward, state2neighbors = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], graph=true)
+# # ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [A_roa], [b_roa], fp=fp, reach=false, back=true, connected=true)
+# end
+# @show length(ap2input)
+# @show length(ap2backward[1])
 
 
 # save pwa map
-save("models/taxinet/taxinet_pwa_map_5_15.jld2", Dict("ap2map" => state2map, "ap2input" => state2input, "ap2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
+# save("models/taxinet/taxinet_pwa_map_5_15.jld2", Dict("ap2map" => ap2map, "ap2input" => ap2input, "ap2neighbors" => state2neighbors, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 # Plot all regions #
-# plt_in1 = plot_hrep_taxinet(state2input)
+# plt_in1 = plot_hrep_taxinet(ap2input)
 # scatter!(plt_in1, [fp[1]], [fp[2]])
 # plot!(plt_in1, reg_roa)
 
-# plt_in2  = plot_hrep_taxinet(state2backward[1])
+# plt_in2  = plot_hrep_taxinet(ap2backward[1])
 
+# net_dict = load("models/taxinet/taxinet_pwa_map_5_15.jld2")
+# ap2map = net_dict["ap2map"]
+# ap2input = net_dict["ap2input"]
 
 # determine if function is a homeomorphism
-homeomorph = is_homeomorphism(state2map, size(Aᵢ,2))
-println("PWA function is a homeomorphism: ", homeomorph)
+# homeomorph = is_homeomorphism(ap2map, size(Aᵢ,2))
+# println("PWA function is a homeomorphism: ", homeomorph)
 
 
 # find any fixed points if they exist
-# fixed_points, fp_dict = find_fixed_points(state2map, state2input, weights)
+# fixed_points, fp_dict = find_fixed_points(ap2map, ap2input, weights)
 # @show fixed_points
 
 
 # find an attractive fixed point and return it's affine function y=Cx+d and polytope Aₓx≤bₓ
-# fp, C, d, Aₓ, bₓ = find_attractor(fixed_points, fp_dict)
+# A1, b1 =  fp_dict[fixed_points[1]][1]
+# C1, d1 = fp_dict[fixed_points[1]][2]
+# fp2, C2, d2, A2, b2 = find_attractor([fixed_points[2]], fp_dict)
+# fp3, C3, d3, A3, b3 = find_attractor([fixed_points[3]], fp_dict)
+
+
+# plt = plot(reuse = false, xlabel="x₁", ylabel="x₂")
+# scatter!(plt, [fp2[1]], [fp2[2]], label="fp2")
+# scatter!(plt, [fp3[1]], [fp3[2]], label="fp3")
+# plot!(HPolytope(A1, b1), label="unstable")
+# plot!(HPolytope(A2, b2), label="stable")
+# plot!(HPolytope(A3, b3), label="stable")
+
+
+# num_constraints = 50
+# A2_roa, b2_roa = polytope_roa_sdp(A2, b2, C2, fp2, num_constraints)
+# A3_roa, b3_roa = polytope_roa_sdp(A3, b3, C3, fp3, num_constraints)
+
+# plot!(HPolytope(A2_roa, b2_roa), label="stable_roa")
+# plot!(HPolytope(A3_roa, b3_roa), label="stable_roa")
+
+# save("models/taxinet/5_15/fp_info.jld2", Dict("stable fps" => fixed_points[2:3], "roas" => [(A2_roa, b2_roa), (A3_roa, b3_roa)]))
+
+
+
+
+
+
+
+
 
 # Getting mostly suboptimal SDP here
-# A_roa, b_roa, fp, state2backward_chain, plt_in2 = find_roa("taxinet", weights, 40, 1)
+# A_roa, b_roa, fp, ap2backward_chain, plt_in2 = find_roa("taxinet", weights, 40, 1)
 # @show plt_in2
 
 
@@ -111,5 +143,5 @@ println("PWA function is a homeomorphism: ", homeomorph)
 
 # Load in saved function #
 # pwa_dict = load("models/taxinet/taxinet_pwa_map.jld2")
-# state2input = pwa_dict["state2input"]
-# plt_in1 = plot_hrep_taxinet(state2input)
+# ap2input = pwa_dict["ap2input"]
+# plt_in1 = plot_hrep_taxinet(ap2input)
