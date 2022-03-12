@@ -55,7 +55,7 @@ This function computes an i-step BRS, given a saved (i-1)-step step BRS.
 merge flag controls whether BRS polytopes are merged before returning result.
 save flag controls whether the resulting i-step BRS is saved to file
 =#
-function backward_reach(pwa_dict, i; Save=false, verbose=false)
+function backward_reach(pwa_dict, pwa_info, i; Save=false, verbose=false)
 	verbose ? println("Computing ", i, "-step BRS.") : nothing
 
 	# load in homeomorphic PWA function
@@ -68,7 +68,7 @@ function backward_reach(pwa_dict, i; Save=false, verbose=false)
 	output_polytopes = brs_dict["brs"]
 
 	# find ap for cell that fp lives in
-	ap = pwa_dict["ap_fp3"]
+	ap = pwa_info["ap_fp3"]
 	working_set = Set{Vector{BitVector}}() # APs we want to explore
 	explored_set = Set{Vector{BitVector}}() # APs we have already explored
 	brs_polytopes = Set{Tuple{Matrix{Float64},Vector{Float64}}}() # backward reachable set, stored as a collection of polytopes
@@ -128,6 +128,7 @@ end
 # Aᵢ = pwa_dict["Aᵢ"]
 # bᵢ = pwa_dict["bᵢ"]
 # save("models/taxinet/taxinet_pwa_map_5_15.jld2", Dict("ap2map" => ap2map, "ap2input" => ap2input, "ap2neighbors" => ap2neighbors, "ap_fp2" => ap2, "ap_fp3" => ap3, "fp2" => fp2, "fp3" => fp3, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
+# save("models/taxinet/5_15/back_reach_info.jld2", Dict("ap_fp2" => ap2, "ap_fp3" => ap3, "fp2" => fp2, "fp3" => fp3, "Aᵢ" => Aᵢ, "bᵢ" => bᵢ))
 
 
 
@@ -146,6 +147,7 @@ end
 
 ### Scripting ###
 pwa_dict = load("models/taxinet/taxinet_pwa_map_5_15.jld2")
+pwa_info = load("models/taxinet/5_15/back_reach_info.jld2")
 start_steps = 1
 end_steps = 1000
 
@@ -158,7 +160,7 @@ poly_counts = stats["poly_counts"]
 # To compute multiple steps #
 for i in start_steps:end_steps
 	println("\n")
-	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(pwa_dict, i; Save=Save, verbose=true)
+	brs_polytopes, t, bytes, gctime, memallocs = @timed backward_reach(pwa_dict, pwa_info, i; Save=Save, verbose=true)
 	
 	if length(times) == length(poly_counts)
 		if i ≤ length(times)
