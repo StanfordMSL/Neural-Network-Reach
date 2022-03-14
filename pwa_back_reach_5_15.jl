@@ -64,7 +64,7 @@ function backward_reach(pwa_dict, pwa_info, i; Save=false, verbose=false)
 	ap2neighbors = pwa_dict["ap2neighbors"]
 
 	# load in set to find preimage of
-	brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i-1, "_step.jld2"))
+	brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i-1, "_step_overlap.jld2"))
 	output_polytopes = brs_dict["brs"]
 
 	# find ap for cell that fp lives in
@@ -109,7 +109,7 @@ function backward_reach(pwa_dict, pwa_info, i; Save=false, verbose=false)
 
 	# save the i-step brs
 	if Save
-		save(string("models/taxinet/5_15/taxinet_brs3_", i, "_step.jld2"), Dict("brs" => brs_polytopes))
+		save(string("models/taxinet/5_15/taxinet_brs3_", i, "_step_overlap.jld2"), Dict("brs" => brs_polytopes))
 	end
 
 	verbose ? println(length(brs_polytopes), " in the BRS.") : nothing
@@ -151,9 +151,9 @@ pwa_info = load("models/taxinet/5_15/back_reach_info.jld2")
 start_steps = 1
 end_steps = 1000
 
-# times, poly_counts = Vector{Float64}(undef, 0), Vector{Int64}(undef, 0)
+times, poly_counts = Vector{Float64}(undef, 0), Vector{Int64}(undef, 0)
 Save = true
-stats = load("models/taxinet/5_15/stats3.jld2")
+stats = load("models/taxinet/5_15/stats3_overlap.jld2")
 times = stats["times"]
 poly_counts = stats["poly_counts"]
 
@@ -173,7 +173,7 @@ for i in start_steps:end_steps
 	end
 
 	if Save
-		save("models/taxinet/5_15/stats3.jld2", Dict("times" => times, "poly_counts" => poly_counts))
+		save("models/taxinet/5_15/stats3_overlap.jld2", Dict("times" => times, "poly_counts" => poly_counts))
 	end
 	println("total time: ", t)
 end
@@ -186,9 +186,9 @@ end
 
 
 ## To plot a BRS ##
-# i = 8
-# brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i, "_step.jld2"))
-# output_polytopes = brs_dict["brs"]
-# plt = plot_polytopes(output_polytopes)
+#i = 13
+#brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i, "_step.jld2"))
+#output_polytopes = brs_dict["brs"]
+#plt = plot_polytopes(output_polytopes)
 
 # savefig(plt, string(i, ".png"))
