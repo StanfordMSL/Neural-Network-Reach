@@ -30,7 +30,7 @@ function merge_polytopes(polytopes::Set{ Tuple{Matrix{Float64}, Vector{Float64}}
 		P(i) = Polyhedron($As_mat{i}, $bs_mat{i});
 	end
 	U = PolyUnion('Set',P,'convex',false,'overlaps',true,'Connected',true,'fulldim',true,'bounded',true);
-	merged = U.merge('optimal', false);
+	merged = U.merge('optimal', true);
 	$len_m = length(merged.Set);
 	$As_merged = cell($len_m,1);
 	$bs_merged = cell($len_m,1);

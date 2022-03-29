@@ -64,11 +64,13 @@ function backward_reach(pwa_dict, pwa_info, i; Save=false, verbose=false)
 	ap2neighbors = pwa_dict["ap2neighbors"]
 
 	# load in set to find preimage of
-	brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i-1, "_step_overlap.jld2"))
+	brs_dict = load(string("models/taxinet/5_15/taxinet_brs2_", i-1, "_step_overlap.jld2"))
+	# brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i-1, "_step_overlap.jld2"))
 	output_polytopes = brs_dict["brs"]
 
 	# find ap for cell that fp lives in
-	ap = pwa_info["ap_fp3"]
+	ap = pwa_info["ap_fp2"]
+	# ap = pwa_info["ap_fp3"]
 	working_set = Set{Vector{BitVector}}() # APs we want to explore
 	explored_set = Set{Vector{BitVector}}() # APs we have already explored
 	brs_polytopes = Set{Tuple{Matrix{Float64},Vector{Float64}}}() # backward reachable set, stored as a collection of polytopes
@@ -109,7 +111,8 @@ function backward_reach(pwa_dict, pwa_info, i; Save=false, verbose=false)
 
 	# save the i-step brs
 	if Save
-		save(string("models/taxinet/5_15/taxinet_brs3_", i, "_step_overlap.jld2"), Dict("brs" => brs_polytopes))
+		save(string("models/taxinet/5_15/taxinet_brs2_", i, "_step_overlap.jld2"), Dict("brs" => brs_polytopes))
+		# save(string("models/taxinet/5_15/taxinet_brs3_", i, "_step_overlap.jld2"), Dict("brs" => brs_polytopes))
 	end
 
 	verbose ? println(length(brs_polytopes), " in the BRS.") : nothing
@@ -148,12 +151,14 @@ end
 ### Scripting ###
 pwa_dict = load("models/taxinet/taxinet_pwa_map_5_15.jld2")
 pwa_info = load("models/taxinet/5_15/back_reach_info.jld2")
-start_steps = 29
-end_steps = 300
+start_steps = 20
+end_steps = 500
 
 times, poly_counts = Vector{Float64}(undef, 0), Vector{Int64}(undef, 0)
 Save = true
-stats = load("models/taxinet/5_15/stats3_overlap.jld2")
+stats = load("models/taxinet/5_15/stats2_overlap.jld2")
+# stats = load("models/taxinet/5_15/stats3_overlap.jld2")
+
 times = stats["times"]
 poly_counts = stats["poly_counts"]
 
@@ -173,7 +178,8 @@ for i in start_steps:end_steps
 	end
 
 	if Save
-		save("models/taxinet/5_15/stats3_overlap.jld2", Dict("times" => times, "poly_counts" => poly_counts))
+		save("models/taxinet/5_15/stats2_overlap.jld2", Dict("times" => times, "poly_counts" => poly_counts))
+		# save("models/taxinet/5_15/stats3_overlap.jld2", Dict("times" => times, "poly_counts" => poly_counts))
 	end
 	println("total time: ", t)
 end
@@ -186,9 +192,10 @@ end
 
 
 ## To plot a BRS ##
-#i = 13
-#brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i, "_step.jld2"))
-#output_polytopes = brs_dict["brs"]
-#plt = plot_polytopes(output_polytopes)
+# i = 19
+# brs_dict = load(string("models/taxinet/5_15/taxinet_brs2_", i, "_step_overlap.jld2"))
+# brs_dict = load(string("models/taxinet/5_15/taxinet_brs3_", i, "_step_overlap.jld2"))
+# output_polytopes = brs_dict["brs"]
+# plt = plot_polytopes(output_polytopes)
 
 # savefig(plt, string(i, ".png"))
