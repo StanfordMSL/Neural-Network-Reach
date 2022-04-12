@@ -1,10 +1,10 @@
 using NPZ
 
-# torque-controlled damped pendulum #
-# dynamics from http://control.asu.edu/Publications/2018/Colbert_CDC_2018.pdf
+# torque-controlled pendulum #
+# dynamics from https://ocw.mit.edu/courses/2-04a-systems-and-controls-spring-2013/cec516593e76ea28d76655ab3b64f472_MIT2_04AS13_Lecture18.pdf
 
-
-RK_f(x, u; m=1., l=1., b=1.) = [x[2], (u - b*x[2] - m*9.81*l*sin(x[1]))/(m*l^2)]
+# RK_f(x, u; m=1., l=1., b=1.) = [x[2], (u - b*x[2] - m*9.81*l*sin(x[1]))/(m*l^2)]
+RK_f(x, u; m=1., l=1.) = [x[2], (u + m*9.81*l*sin(x[1]))/(m*l^2)]
 
 
 function RK_update(x, u, dt)
@@ -20,7 +20,7 @@ bound_r(a,b) = (b-a)*(rand()-1) + b # Generates a uniformly random number on [a,
 # generates data where each X[i,:] is an input and each corresponding Y[i,:] is an output
 function gen_data(n)
 	dt = 0.1
-	X = hcat([[bound_r(2*π/3, 4*π/3), bound_r(-π, π), bound_r(-2,2)] for i in 1:n]...)'
+	X = hcat([[bound_r(-π, π), bound_r(-π, π), bound_r(-5,5)] for i in 1:n]...)'
 	Y = hcat([RK_update(X[i,1:2], X[i,3], dt) for i in 1:n]...)'
 	npzwrite("models/Pendulum/X_controlled.npy", X)
 	npzwrite("models/Pendulum/Y_controlled.npy", Y)

@@ -101,7 +101,7 @@ def test(dataloader, model, loss_fn):
 
 
 # Choose dynamics: "vanderpol", "mpc", "taxinet_dyn", "pend_ctrl"
-dynamics = "taxinet_dyn"
+dynamics = "pend_ctrl"
 
 if torch.cuda.is_available(): device = torch.device("cuda")
 else:                         device = torch.device("cpu")
@@ -110,14 +110,11 @@ else:                         device = torch.device("cpu")
 # X = numpy.load("models/taxinet/Y_image.npy")
 # Y = numpy.load("models/taxinet/X_image.npy")
 
-X = numpy.load("models/taxinet/X_dynamics_5hz.npy")
-Y = numpy.load("models/taxinet/Y_dynamics_5hz.npy")
+# X = numpy.load("models/taxinet/X_dynamics_5hz.npy")
+# Y = numpy.load("models/taxinet/Y_dynamics_5hz.npy")
 
-# X = numpy.load("models/Pendulum/X_controlled.npy")
-# Y = numpy.load("models/Pendulum/Y_controlled.npy")
-
-# X = numpy.load("models/" + dynamics + "/X.npy")
-# Y = numpy.load("models/" + dynamics + "/Y.npy")
+X = numpy.load("models/Pendulum/X_controlled.npy")
+Y = numpy.load("models/Pendulum/Y_controlled.npy")
 
 X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
 Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
@@ -138,14 +135,14 @@ batch_size = 100
 train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
-layer_sizes = numpy.array([in_dim, 8, out_dim])
+layer_sizes = numpy.array([in_dim, 16, 16, out_dim])
 model = FFReLUNet(layer_sizes).to(device)
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-6)
 print("\n", model)
 
 # Train
-epochs = 1
+epochs = 3
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
@@ -164,69 +161,13 @@ for name, param in model.named_parameters():
 
     
 # save weights and normalization parameters
-numpy.savez("models/taxinet/weights_dynamics_5hz.npz", *weights)
-numpy.savez("models/taxinet/norm_params_dynamics_5hz.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+# numpy.savez("models/taxinet/weights_dynamics_5hz.npz", *weights)
+# numpy.savez("models/taxinet/norm_params_dynamics_5hz.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+
+numpy.savez("models/Pendulum/weights_controlled.npz", *weights)
+numpy.savez("models/Pendulum/norm_params_controlled.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+
 
 # numpy.savez("models/" + dynamics + "/weights.npz", *weights)
 # numpy.savez("models/" + dynamics + "/norm_params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
 
-# For validation
-# model.eval()
-# inpt = [0.5, 0.3]
-# inpt_norm = torch.tensor(([inpt] - X_mean) / X_std, dtype=torch.float32).to(device)
-# outpt_norm = model.forward(inpt_norm)
-# outpt = (Y_std * outpt_norm.detach().numpy()) + Y_mean
-
-# print("\nX_mean: ", X_mean)
-# print("X_std: ", X_std)
-# print("Y_mean: ", Y_mean)
-# print("Y_std: ", Y_std)
-
-# print("Validation Input: ", inpt)
-# print("Normalized Input: ", inpt_norm)
-# print("Normalized Output: ",outpt_norm)
-# print("Unnormalized Output: ", outpt)
-
-
-
-
-
-
-
-
-
-# OLD STUFF
-# Download training data from open datasets.
-# training_data = datasets.FashionMNIST(
-#     root="data",
-#     train=True,
-#     download=True,
-#     transform=ToTensor(),
-# )
-
-# # Download test data from open datasets.
-# test_data = datasets.FashionMNIST(
-#     root="data",
-#     train=False,
-#     download=True,
-#     transform=ToTensor(),
-# )
-
-# # Define model
-# class NeuralNetwork(nn.Module):
-#     def __init__(self):
-#         super(NeuralNetwork, self).__init__()
-#         self.flatten = nn.Flatten()
-#         self.linear_relu_stack = nn.Sequential(
-#             nn.Linear(28*28, 512),
-#             nn.ReLU(),
-#             nn.Linear(512, 512),
-#             nn.ReLU(),
-#             nn.Linear(512, 10),
-#             nn.ReLU()
-#         )
-
-#     def forward(self, x):
-#         x = self.flatten(x)
-#         logits = self.linear_relu_stack(x)
-#         return logits

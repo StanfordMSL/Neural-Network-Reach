@@ -3,8 +3,8 @@ clc
 
 % Load in A,b, C,d cell arrays
 load('pendulum_controlled_pwa.mat');
-X = Polyhedron('lb', [2*pi/3; -pi/6], 'ub', [4*pi/3; pi/6]);
-U = Polyhedron('lb', -2, 'ub', 2);
+X = Polyhedron('lb', [-pi; -pi], 'ub', [pi; pi]);
+U = Polyhedron('lb', -5, 'ub', 5);
 
 num_regions = length(A);
 for i = 1:num_regions
@@ -13,7 +13,9 @@ end
 
 % pwa = PWASystem('A', dyn_A, 'B', dyn_B, 'f', dyn_f, 'domain', dyn_P);
 pwa = PWASystem(systems);
-S = pwa.invariantSet('X', X, 'U', U, 'maxIterations', 20);
+tic;
+S = pwa.invariantSet('X', X, 'U', U, 'maxIterations', 2);
+t = toc;
 plot(S)
 xlabel("Angle (rad)")
 ylabel("Angular Velocity (rad/s)")
@@ -22,7 +24,7 @@ ylabel("Angular Velocity (rad/s)")
 
 % Save concactenated Ab H-rep of the control invariant set
 Ab = S.H;
-save("cntrl_invariant.mat", 'Ab');
+% save("cntrl_invariant.mat", 'Ab');
 
 
 

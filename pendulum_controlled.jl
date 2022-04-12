@@ -6,7 +6,7 @@ function input_constraints_pendulum(weights, type::String)
 	# Each input specification is in the form Ax≤b
 	if type == "pendulum"
 		A = [1. 0 0; -1 0 0; 0 1 0; 0 -1 0; 0 0 1; 0 0 -1]
-		b = [4*π/3, -2*π/3, π/6, π/6, 2, 2]
+		b = [π, π, π, π, 5, 5]
 	elseif type == "box"
 		in_dim = size(weights[1],2) - 1
 		A_pos = Matrix{Float64}(I, in_dim, in_dim)
@@ -75,10 +75,10 @@ Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum")
 Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
 
 # Run algorithm
-@time begin
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
-end
-@show length(state2input)
+# @time begin
+# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
+# end
+# @show length(state2input)
 
 # Plot all regions #
 # plt_in1  = plot_hrep_pendulum(state2input)
@@ -87,4 +87,7 @@ end
 # plot((180/π)*HPolytope(constraints_list(A_ctrl, b_ctrl)), reuse = false, legend=false, title="Control Invariant Set", xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
 
 
-save("models/Pendulum/pendulum_controlled_pwa.jld2", Dict("state2input" => state2input, "state2map" => state2map, "Ai" => Aᵢ, "bi" => bᵢ))
+# save("models/Pendulum/pendulum_controlled_pwa.jld2", Dict("state2input" => state2input, "state2map" => state2map, "Ai" => Aᵢ, "bi" => bᵢ))
+
+
+
