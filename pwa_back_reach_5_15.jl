@@ -151,7 +151,7 @@ end
 ### Scripting ###
 pwa_dict = load("models/taxinet/taxinet_pwa_map_5_15.jld2")
 pwa_info = load("models/taxinet/5_15/back_reach_info.jld2")
-start_steps = 20
+start_steps = 22
 end_steps = 500
 
 times, poly_counts = Vector{Float64}(undef, 0), Vector{Int64}(undef, 0)
