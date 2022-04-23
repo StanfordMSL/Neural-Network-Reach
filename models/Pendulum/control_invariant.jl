@@ -59,13 +59,13 @@ function ctrl_inv(max_iters)
 end
 
 
-inv_set = ctrl_inv(100)
-save("models/Pendulum/pendulum_controlled_inv_set.jld2", Dict("inv_set" => inv_set) )
+# inv_set = ctrl_inv(100)
+# save("models/Pendulum/pendulum_controlled_inv_set.jld2", Dict("inv_set" => inv_set) )
 
-# inv_dict = load("models/Pendulum/pendulum_controlled_inv_set.jld2",)
-# inv_set = inv_dict["inv_set"]
+inv_dict = load("models/Pendulum/pendulum_controlled_inv_set.jld2",)
+inv_set = inv_dict["inv_set"]
 
-# plt = plot_hrep(inv_set)
+plt = plot_hrep(inv_set)
 
 
 

@@ -2,7 +2,7 @@ using Plots, LazySets, FileIO
 include("load_networks.jl")
 
 
-function sample_forward(weights, N, X1, X2, reg_roa)
+function sample_forward(weights, N, X1, X2, roa2, roa3)
 	converged, unconverged = Vector{Tuple{Int64, Int64}}(undef, 0), Vector{Tuple{Int64, Int64}}(undef, 0)
 	# check if initial condition gets to roa in N time steps
 	for (i, x₁) in enumerate(X1)
@@ -15,7 +15,7 @@ function sample_forward(weights, N, X1, X2, reg_roa)
 				if !in_domain
 					push!(unconverged, (i,j))
 					break
-				elseif k == N && x′ ∉ reg_roa
+				elseif k == N && (x′ ∉ roa2 || x′ ∉ roa3)
 					push!(unconverged, (i, j))
 				elseif k == N
 					push!(converged, (i, j))
@@ -44,12 +44,12 @@ function reconstruct(converged, unconverged, N, X1, X2)
 	return plt
 end
 
-function run_trials()
+function run_trials(weights, roa1, roa2)
 	X1 = -5:.1:5
-	X2 = -15:.2:15
+	X2 = -15:.1:15
 	results = Dict() # Dict of time-step -> converged, unconverged data
-	for N in 50:50:1000
-		converged, unconverged = sample_forward(weights, N, X1, X2, reg_roa)
+	for N in 1000:1000
+		converged, unconverged = sample_forward(weights, N, X1, X2, roa1, roa2)
 		results[string(N)] = (converged, unconverged)
 	end
 	return results, X1, X2
@@ -61,24 +61,26 @@ weights = taxinet_cl(copies)
 
 
 # Define ROA
-fp = [-1.089927713157323, -0.12567755953751042]
-A_roa = 370*[-0.20814568962857855 0.03271955855771795; 0.2183098663000297 0.12073669880754853; 0.42582101825227686 0.0789033995762251; 0.14480530852927057 -0.05205811047518554; -0.13634673812819695 -0.1155315084750385; 0.04492020060602461 0.09045775648816877; -0.6124506220873154 -0.12811621541510643]
-b_roa = ones(size(A_roa,1)) + A_roa*fp
-reg_roa = HPolytope(A_roa, b_roa)
+fp2dict = load("models/taxinet/5_15/taxinet_brs2_0_step.jld2")
+fp3dict = load("models/taxinet/5_15/taxinet_brs3_0_step.jld2")
+
+roa2 = HPolytope(fp2dict["brs"][1][1], fp2dict["brs"][1][2])
+roa3 = HPolytope(fp3dict["brs"][1][1], fp3dict["brs"][1][2])
 
 
-# large trials
-# results, X1, X2 = run_trials()
-# save("models/taxinet/sample_roas_2.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
+# run large trials
+results, X1, X2 = run_trials(weights, roa2, roa3)
+save("models/taxinet/sample_roas_4_22.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
 
-sample_dict = load("models/taxinet/sample_roas_2.jld2")
-results = sample_dict["results"]
-X1, X2 = sample_dict["X1"], sample_dict["X2"]
 
-N = 1000
-converged, unconverged = results[string(N)]
+# plot results
+# sample_dict = load("models/taxinet/sample_roas_4_22.jld2")
+# results = sample_dict["results"]
+# X1, X2 = sample_dict["X1"], sample_dict["X2"]
 
-plt = reconstruct(converged, unconverged, N, X1, X2)
+# N = 10
+# converged, unconverged = results[string(N)]
+# plt = reconstruct(converged, unconverged, N, X1, X2)
 
 
 
