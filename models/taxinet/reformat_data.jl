@@ -32,12 +32,13 @@ println("Size X: ", size(X))
 println("Size X_flat: ", size(reshape(X, 16*8, 63141)))
 println("Size Y: ", size(Y))
 
-npzwrite("models/taxinet/X_image.npy", X_flat')
-npzwrite("models/taxinet/Y_image.npy", Y')
+# npzwrite("models/taxinet/X_image.npy", X_flat')
+# npzwrite("models/taxinet/Y_image.npy", Y')
 
 # save("data.jld2", Dict("X" => X, "Y" => Y))
 # dat_dict = load("data.jld2")
 
 
-
+using Colors, Plots
+plt = plot(Gray.(X[:,:,1]))
 

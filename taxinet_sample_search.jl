@@ -15,7 +15,7 @@ function sample_forward(weights, N, X1, X2, roa2, roa3)
 				if !in_domain
 					push!(unconverged, (i,j))
 					break
-				elseif k == N && (x′ ∉ roa2 || x′ ∉ roa3)
+				elseif k == N && !(x′ ∈ roa2 || x′ ∈ roa3)
 					push!(unconverged, (i, j))
 				elseif k == N
 					push!(converged, (i, j))
@@ -69,16 +69,16 @@ roa3 = HPolytope(fp3dict["brs"][1][1], fp3dict["brs"][1][2])
 
 
 # run large trials
-results, X1, X2 = run_trials(weights, roa2, roa3)
-save("models/taxinet/sample_roas_4_22.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
+# results, X1, X2 = run_trials(weights, roa2, roa3)
+# save("models/taxinet/sample_roas_4_22.jld2", Dict("X1" => X1, "X2" => X2, "results" => results))
 
 
-# plot results
+# # plot results
 # sample_dict = load("models/taxinet/sample_roas_4_22.jld2")
 # results = sample_dict["results"]
 # X1, X2 = sample_dict["X1"], sample_dict["X2"]
 
-# N = 10
+# N = 1000
 # converged, unconverged = results[string(N)]
 # plt = reconstruct(converged, unconverged, N, X1, X2)
 
@@ -86,14 +86,16 @@ save("models/taxinet/sample_roas_4_22.jld2", Dict("X1" => X1, "X2" => X2, "resul
 
 
 # scripting
-# N = 5 # how many steps to consider
+N = 500 # how many steps to consider
 
-# X1 = -10:.1:10
-# X2 = -30:.2:30
+X1 = -5:.1:5
+X2 = -15:.1:15
 
-# @time begin
-# converged, unconverged = sample_forward(weights, N, X1, X2, reg_roa)
-# end
+@time begin
+converged, unconverged = sample_forward(weights, N, X1, X2, roa2, roa3)
+end
 
-# plt = reconstruct(converged, unconverged, N, X1, X2)
+plt = reconstruct(converged, unconverged, N, X1, X2)
+plot!(plt, roa2)
+plot!(plt, roa3)
 
