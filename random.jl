@@ -25,7 +25,7 @@ function input_constraints_random(weights, type::String)
 end
 
 # Plots all polyhedra
-function plot_hrep_random(ap2constraints; space = "input")
+function plot_hrep_random(ap2constraints)
 	plt = plot(reuse = false)
 	for ap in keys(ap2constraints)
 		A, b = ap2constraints[ap]
@@ -51,7 +51,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-in_d, out_d, hdim, layers = 2, 1, 10, 3
+in_d, out_d, hdim, layers = 2, 1, 10, 2
 weights = random_net(in_d, out_d, hdim, layers) 
 
 Aᵢ, bᵢ = input_constraints_random(weights, "box")
@@ -66,7 +66,7 @@ end
 
 
 # Plot all regions (only 2D input) #
-plt_in  = plot_hrep_random(ap2input, space="input")
+plt_in  = plot_hrep_random(ap2input)
 
 
 

@@ -58,7 +58,7 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-copies = 1 # copies = 1 is original network
+copies = 50 # copies = 1 is original network
 model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
 
 weights = pendulum_net(model, copies)
