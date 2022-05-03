@@ -5,7 +5,7 @@ include("unique_custom.jl")
 ϵ = 1e-10 # used for numerical tolerances throughout
 
 ### GENERAL PURPOSE FUNCTIONS ###
-function normalize_row(row::Vector{Float64}; return_zero=false)
+function normalize_row_old(row::Vector{Float64}; return_zero=false)
 	for i in 1:length(row)
 		if abs(row[i]) > 1e-12 # ith element nonzero
 			return row ./ abs(row[i]) 
@@ -18,10 +18,21 @@ function normalize_row(row::Vector{Float64}; return_zero=false)
 	end
 end
 
+function normalize_row(row::Vector{Float64})
+	scale = norm(row[1:end-1])
+	size = length(row)-1
+	if scale > ϵ
+		return row / scale
+	else
+		return vcat(zeros(size), [row[end]])
+	end
+end
+
+
 # Returns the algorithm initialization point given task and input space constraints
 function get_input(Aᵢ, bᵢ)
 	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])	
-	return input
+	return input + 0.0001*randn(length(input))
 end
 
 # Given input point, perform forward pass to get ap.
@@ -56,7 +67,7 @@ function neuron_map(layer, neuron, ap, weights; normalize=true)
 	end
 	matrix = weights[layer]*matrix
 	if normalize
-		return normalize_row(matrix[neuron,:], return_zero=true)
+		return normalize_row(matrix[neuron,:])
 	else
 		return matrix[neuron,:]
 	end
@@ -88,6 +99,17 @@ end
 
 
 ### FUNCTIONS FOR GETTING CONSTRAINTS ###
+function positive_zeros(A)
+    k = 1
+    @inbounds for t in eachindex(A)
+        if isequal(A[t], -0.0)
+            A[t] = 0.0
+            k += 1
+        end
+    end
+    return A
+end
+
 # Get redundant A≤b constraints
 function get_constraints(weights::Vector{Matrix{Float64}}, ap::Vector{BitVector}, num_neurons)
 	L = length(weights)
@@ -114,7 +136,9 @@ function get_constraints(weights::Vector{Matrix{Float64}}, ap::Vector{BitVector}
 		lin_map = diagm(0 => ap[layer])*weights[layer]*lin_map
 	end
 
+	A = positive_zeros(A)
 	unique_rows, unique_row = unique_custom(A, dims=1)
+
 	for i in 1:length(unique_row)
 		idx2repeat[i] = findall(x-> x == i, unique_row)
 	end
@@ -134,11 +158,11 @@ end
 
 
 
-
 ### FUNCTIONS FOR REMOVING REDUNDANT CONSTRAINTS ###
 # Remove redundant constraints (rows of A,b).
 # If we relax a constraint, can we push past where its initial 'b' value was? It's essential iff yes.
 function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential)
+	
 	redundant, redundantᵢ = remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices)
 	non_redundant  = setdiff(unique_nonzerow_indices, redundant) # working non-redundant set
 	non_redundantᵢ = setdiff(collect(1:length(bᵢ)), redundantᵢ)  # working non-redundant set
@@ -151,10 +175,14 @@ function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential)
 	saved_lps = length(essential)+length(essentialᵢ) + length(redundant)+length(redundantᵢ)-2*size(A,2)
 	solved_lps = 2*size(A,2) + length(unknown_set) + length(unknown_setᵢ)
 
-	return vcat(A[essential,:], Aᵢ[essentialᵢ,:]), vcat(b[essential], bᵢ[essentialᵢ]), sort(essential), saved_lps, solved_lps
+	if bᵢ != []
+		return vcat(A[essential,:], Aᵢ[essentialᵢ,:]), vcat(b[essential], bᵢ[essentialᵢ]), sort(essential), saved_lps, solved_lps
+	else
+		return A[essential,:], b[essential], sort(essential), saved_lps, solved_lps
+	end
+
 end
 
-# Heuristic for finding redundant constraints: finds upper and lower bounds for each component of x given Ax≤b
 function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
 	redundant = Vector{Int64}()
 	redundantᵢ = Vector{Int64}()
@@ -163,7 +191,7 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 	presolve ? set_optimizer_attribute(model, "presolve", 1) : nothing
 	@variable(model, x[1:size(A,2)])
 	@constraint(model, A[unique_nonzerow_indices,:]*x .<= b[unique_nonzerow_indices])
-	@constraint(model, Aᵢ*x .<= bᵢ)
+	bᵢ != [] ? @constraint(model, Aᵢ*x .<= bᵢ) : nothing
 	@constraint(model, x[1:size(A,2)] .<= 1e8*ones(size(A,2)))  # to keep bounded
 	@constraint(model, x[1:size(A,2)] .>= -1e8*ones(size(A,2))) # to keep bounded
 	for i in 1:size(A,2)
@@ -186,9 +214,11 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 		val = sum([A[i,j] > 0 ? A[i,j]*bounds[j,2] : A[i,j]*bounds[j,1] for j in 1:size(A,2)])
 		val + ϵ < b[i]  ? push!(redundant,i) : nothing
 	end
-	for i in length(bᵢ)
-		val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in 1:size(Aᵢ,2)])
-		val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
+	if bᵢ != []
+		for i in length(bᵢ)
+			val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in 1:size(Aᵢ,2)])
+			val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
+		end
 	end
 	return redundant, redundantᵢ
 end
@@ -200,7 +230,7 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 	presolve ? set_optimizer_attribute(model, "presolve", 1) : nothing
 	@variable(model, x[1:size(A,2)])
 	@constraint(model, con[j in non_redundant], dot(A[j,:],x) <= b[j])
-	@constraint(model, conₛ[j in non_redundantᵢ], dot(Aᵢ[j,:],x) <= bᵢ[j]) # tack on non-redundant superset constraints
+	bᵢ != [] ? @constraint(model, conₛ[j in non_redundantᵢ], dot(Aᵢ[j,:],x) <= bᵢ[j]) : nothing # tack on non-redundant superset constraints
 
 	for (k,i) in enumerate(unknown_set)
 		@objective(model, Max, dot(A[i,:],x))
@@ -208,7 +238,6 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 		k > 1 ? set_normalized_rhs(con[unknown_set[k-1]], b[unknown_set[k-1]]) : nothing # un-relax i-1 constraint
 		optimize!(model)
 		if termination_status(model) == MOI.OPTIMAL
-
 			if objective_value(model) > b[i] + ϵ # 1e-15 is too small.
 				push!(essential, i)
 			end
@@ -221,22 +250,24 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 		end
 	end
 
-	# Brute force LP method on superset constraints#
-	for (k,i) in enumerate(unknown_setᵢ)
-		@objective(model, Max, dot(Aᵢ[i,:],x))
-		set_normalized_rhs(conₛ[i], bᵢ[i]+100) # relax ith constraint
-		k > 1 ? set_normalized_rhs(conₛ[unknown_setᵢ[k-1]], bᵢ[unknown_setᵢ[k-1]]) : nothing # un-relax i-1 constraint
-		optimize!(model)
-		if termination_status(model) == MOI.OPTIMAL
-			if objective_value(model) > bᵢ[i] + ϵ
-				push!(essentialᵢ, i)
+	if bᵢ != []
+		# Brute force LP method on superset constraints#
+		for (k,i) in enumerate(unknown_setᵢ)
+			@objective(model, Max, dot(Aᵢ[i,:],x))
+			set_normalized_rhs(conₛ[i], bᵢ[i]+100) # relax ith constraint
+			k > 1 ? set_normalized_rhs(conₛ[unknown_setᵢ[k-1]], bᵢ[unknown_setᵢ[k-1]]) : nothing # un-relax i-1 constraint
+			optimize!(model)
+			if termination_status(model) == MOI.OPTIMAL
+				if objective_value(model) > bᵢ[i] + ϵ
+					push!(essentialᵢ, i)
+				end
+			elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
+				return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, presolve=true)
+			else
+				@show termination_status(model)
+				println("Dual infeasible implies that primal is unbounded.")
+				error("Suboptimal LP constraint check!")
 			end
-		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
-			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, presolve=true)
-		else
-			@show termination_status(model)
-			println("Dual infeasible implies that primal is unbounded.")
-			error("Suboptimal LP constraint check!")
 		end
 	end
 	return essential, essentialᵢ
@@ -257,9 +288,10 @@ end
 
 
 
+
 ### FUNCTIONS FOR FINDING NEIGHBORS ###
 # Adds neighbor aps to working_set
-function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential)	
+function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential, ap2neighbors; graph=false)	
 	for idx in neighbor_indices
 		neighbor_ap = deepcopy(ap)
 		l, n = get_layer_neuron(idx, neighbor_ap)
@@ -269,7 +301,23 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 		type2 = zerows
 		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 
-		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set
+		
+		if graph
+			if !haskey(ap2neighbors, ap)
+				ap2neighbors[ap] = [neighbor_ap]
+			elseif neighbor_ap ∉ ap2neighbors[ap]
+				push!(ap2neighbors[ap], neighbor_ap)
+			end
+
+			if !haskey(ap2neighbors, neighbor_ap)
+				ap2neighbors[neighbor_ap] = [ap]
+			elseif ap ∉ ap2neighbors[neighbor_ap]
+				push!(ap2neighbors[neighbor_ap], ap)
+			end
+		end
+
+		
+		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set # if I haven't explored it && it's not yet in the working set
 			push!(working_set, neighbor_ap)
 			ap2essential[neighbor_ap] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
 		end
@@ -296,14 +344,15 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
 				neighbor_ap[l][n] = !neighbor_ap[l][n]
 			end 
-		# we know that a⋅x = b must be a subset of the new constraint set to be valid
-		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ≥0 (where b′ = b + Δ, Δ≥0) ⟹ a⋅x = b + Δ -s && Δ≥0 && s≥0 ⟹ a⋅x = b is satisfied for s = Δ, thus valid
+		# elseif neuron_idx ∈ type1
+		# 	neighbor_ap[l][n] = !neighbor_ap[l][n]
+		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b 
 			nothing
-		elseif isapprox(a′, a, atol=ϵ ) && b′ < b # a′⋅x ≤ b′ ⟹ a⋅x ≤ b + Δ && Δ<0 (where b′ = b + Δ, Δ<0) ⟹ a⋅x = b + Δ -s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+		elseif isapprox(a′, a, atol=ϵ ) && b′ < b
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≤ b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ≥0 (where -b′ = b - Δ, Δ≥0) ⟹ a⋅x = b - Δ + s && Δ≥0 && s≥0 ⟹ a⋅x = b for s = Δ, thus valid
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ < b
 			nothing
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ > b # a′⋅x ≤ b′ ⟹ -a⋅x ≤ b′ ⟹ a⋅x ≥ -b′ ⟹ a⋅x ≥ b - Δ && Δ<0 (where -b′ = b - Δ, Δ<0) ⟹ a⋅x = b - Δ + s && Δ<0 && s≥0 ⟹ a⋅x = b is only satisfied for s = Δ which is impossible, thus invalid
+		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≥ b
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
 		else
 			error("Check neuron flipping rules.")

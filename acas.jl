@@ -5,8 +5,6 @@ include("reach.jl")
 # acas properties defined in original reluplex paper appendix
 function input_constraints_acas(weights, type::String; net_dict=[])
 	# Each input specification is in the form Ax≤b
-	# The network takes normalized inputs: xₙ = Aᵢₙx + bᵢₙ
-	# Thus the input constraints for raw network inputs is: A*inv(Aᵢₙ)x ≤ b + A*inv(Aᵢₙ)*bᵢₙ
 	# ACAS input  = [ρ, θ, ψ, v_own, v_int]
 	if type == "acas property 3"
 		A = [ -1  0  0  0  0; # ρ
@@ -23,15 +21,12 @@ function input_constraints_acas(weights, type::String; net_dict=[])
 	else
 		error("Invalid input constraint specification.")
 	end
-	Aᵢₙ, bᵢₙ = net_dict["input_norm_map"]
-	return A*inv(Aᵢₙ), b + A*inv(Aᵢₙ)*bᵢₙ
+	return Matrix{Float64}(A), Vector{Float64}(b)
 end
 
 # Returns H-rep of various output sets
 function output_constraints_acas(weights, type::String; net_dict=[])
 	# Each output specification is in the form Ayₒᵤₜ≤b
-	# The raw network outputs are unnormalized: yₒᵤₜ = Aₒᵤₜy + bₒᵤₜ
-	# Thus the output constraints for raw network outputs are: A*Aₒᵤₜ*y ≤ b - A*bₒᵤₜ
 	if type == "acas property 3" || type == "acas property 4" || type == "COC"
 		A = [1 -1 0 0 0;
 			 1 0 -1 0 0;
@@ -65,22 +60,23 @@ function output_constraints_acas(weights, type::String; net_dict=[])
  	else 
  		error("Invalid output constraint specification.")
  	end
- 	Aₒᵤₜ, bₒᵤₜ = net_dict["output_unnorm_map"]
- 	return A*Aₒᵤₜ, b - A*bₒᵤₜ
+ 	return Matrix{Float64}(A), Vector{Float64}(b)
 end
 
 
 ###########################
 ######## SCRIPTING ########
 ###########################
-weights, nnet, net_dict = acas_net_nnet(5,6)
+weights = acas_net_nnet(1,9)
+
 property = "acas property 3"
-Aᵢ, bᵢ = input_constraints_acas(weights, property, net_dict=net_dict)
-Aₒ, bₒ = output_constraints_acas(weights, property, net_dict=net_dict)
+Aᵢ, bᵢ = input_constraints_acas(weights, property)
+Aₒ, bₒ = output_constraints_acas(weights, property)
 
 # Multiple backward reachability queries can be solved by specifying multiple output sets i.e. [Aₒ₁, Aₒ₂], [bₒ₁, bₒ₂]
 ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=true)
 @show length(ap2input)
+# @show length(ap2backward[1])
 
 
 ## Solve for explicit policy ##
