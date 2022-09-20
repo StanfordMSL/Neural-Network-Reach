@@ -51,10 +51,10 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-in_d, out_d, hdim, layers = 2, 1, 10, 2
+in_d, out_d, hdim, layers = 5, 5, 9, 15
 weights = random_net(in_d, out_d, hdim, layers) 
 
-Aᵢ, bᵢ = input_constraints_random(weights, "box")
+Aᵢ, bᵢ = input_constraints_random(weights, "big box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
@@ -66,5 +66,5 @@ end
 
 
 # Plot all regions (only 2D input) #
-plt_in  = plot_hrep_random(ap2input)
+# plt_in  = plot_hrep_random(ap2input)
 

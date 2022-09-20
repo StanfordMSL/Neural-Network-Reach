@@ -291,7 +291,7 @@ end
 
 ### FUNCTIONS FOR FINDING NEIGHBORS ###
 # Adds neighbor aps to working_set
-function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential, ap2neighbors; graph=false)	
+function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential)	
 	for idx in neighbor_indices
 		neighbor_ap = deepcopy(ap)
 		l, n = get_layer_neuron(idx, neighbor_ap)
@@ -302,19 +302,19 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 
 		
-		if graph
-			if !haskey(ap2neighbors, ap)
-				ap2neighbors[ap] = [neighbor_ap]
-			elseif neighbor_ap ∉ ap2neighbors[ap]
-				push!(ap2neighbors[ap], neighbor_ap)
-			end
+		# if graph
+		# 	if !haskey(ap2neighbors, ap)
+		# 		ap2neighbors[ap] = [neighbor_ap]
+		# 	elseif neighbor_ap ∉ ap2neighbors[ap]
+		# 		push!(ap2neighbors[ap], neighbor_ap)
+		# 	end
 
-			if !haskey(ap2neighbors, neighbor_ap)
-				ap2neighbors[neighbor_ap] = [ap]
-			elseif ap ∉ ap2neighbors[neighbor_ap]
-				push!(ap2neighbors[neighbor_ap], ap)
-			end
-		end
+		# 	if !haskey(ap2neighbors, neighbor_ap)
+		# 		ap2neighbors[neighbor_ap] = [ap]
+		# 	elseif ap ∉ ap2neighbors[neighbor_ap]
+		# 		push!(ap2neighbors[neighbor_ap], ap)
+		# 	end
+		# end
 
 		
 		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set # if I haven't explored it && it's not yet in the working set
@@ -336,27 +336,37 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 		l, n = get_layer_neuron(neuron_idx, neighbor_ap)
 		new_map = (1-2*neighbor_ap[l][n])*normalize_row(neuron_map(l, n, neighbor_ap, weights))
 		a′, b′ = new_map[1:end-1], -new_map[end] 
-		
-		# now we check whether a′⋅x ≤ b′ is valid, or if we need to flip the activation such that a′⋅x ≥ b′
-		if isapprox(a′, zeros(length(a′)), atol=ϵ )
-			if b′ ≥ 0 # ⟹ 0⋅x ≤ b′ is then always satisfied, thus valid
-				nothing
-			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
-				neighbor_ap[l][n] = !neighbor_ap[l][n]
-			end 
-		# elseif neuron_idx ∈ type1
-		# 	neighbor_ap[l][n] = !neighbor_ap[l][n]
-		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b 
-			nothing
-		elseif isapprox(a′, a, atol=ϵ ) && b′ < b
+
+		if isapprox(a′, -a, atol=ϵ ) && isapprox(b′, -b, atol=ϵ )
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ < b
-			nothing
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≥ b
-			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		else
-			error("Check neuron flipping rules.")
 		end
+		
+		# # now we check whether a′⋅x ≤ b′ is valid, or if we need to flip the activation such that a′⋅x ≥ b′
+		# if isapprox(a′, zeros(length(a′)), atol=ϵ )
+		# 	if b′ ≥ 0 # ⟹ 0⋅x ≤ b′ is then always satisfied, thus valid
+		# 		println("#1: b' = ", b′, "  b = ", b)
+
+		# 		nothing
+		# 	else # 0⋅x ≤ b′ is then never satisfied, thus invalid
+		# 		neighbor_ap[l][n] = !neighbor_ap[l][n]
+		# 	end 
+		# # elseif neuron_idx ∈ type1
+		# # 	neighbor_ap[l][n] = !neighbor_ap[l][n]
+		# elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b 
+		# 	println("#2: b = ", b′)
+		# 	nothing
+		# elseif isapprox(a′, a, atol=ϵ ) && b′ < b
+		# 	println("#3: b = ", b′)
+		# 	neighbor_ap[l][n] = !neighbor_ap[l][n]
+		# elseif isapprox(-a′, a, atol=ϵ ) && -b′ < b
+		# 	println("#4: b = ", b′)
+		# 	nothing
+		# elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≥ b
+		# 	println("#5: b = ", b′)
+		# 	neighbor_ap[l][n] = !neighbor_ap[l][n]
+		# else
+		# 	error("Check neuron flipping rules.")
+		# end
 	end
 
 	return neighbor_ap

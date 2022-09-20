@@ -20,19 +20,20 @@ bound_r(a,b) = (b-a)*(rand()-1) + b
 
 ```Generate random neural network with Kaiming initialization```
 function random_net(in_d, out_d, hdim, layers)
+	α = sqrt(2/515)
 	Weights = Vector{Array{Float64,2}}(undef,layers)
-	r_weight = sqrt(2/515)*(2*rand(hdim, in_d) - rand(hdim, in_d))
-	r_bias   = sqrt(2/515)*(2*rand(hdim, 1) - rand(hdim, 1))
+	r_weight = α*(2*rand(hdim, in_d) - rand(hdim, in_d))
+	r_bias   = α*(2*rand(hdim, 1) - rand(hdim, 1))
 	Weights[1] = vcat(hcat(r_weight, r_bias), reshape(zeros(1+in_d),1,:))
 	Weights[1][end,end] = 1
 	for i in 2:layers-1
-		r_weight = sqrt(2/515)*(2*rand(hdim, hdim) - rand(hdim, hdim))
-		r_bias   = sqrt(2/515)*(2*rand(hdim, 1) - rand(hdim, 1))
+		r_weight = α*(2*rand(hdim, hdim) - rand(hdim, hdim))
+		r_bias   = α*(2*rand(hdim, 1) - rand(hdim, 1))
 		Weights[i] = vcat(hcat(r_weight, r_bias), reshape(zeros(1+hdim),1,:))
 		Weights[i][end,end] = 1
 	end
-	r_weight = sqrt(2/515)*(2*rand(out_d, hdim) - rand(out_d, hdim))
-	r_bias   = sqrt(2/515)*(2*rand(out_d, 1) - rand(out_d, 1))
+	r_weight = α*(2*rand(out_d, hdim) - rand(out_d, hdim))
+	r_bias   = α*(2*rand(out_d, 1) - rand(out_d, 1))
 	Weights[end] = hcat(r_weight, r_bias)
 	return Weights
 end
