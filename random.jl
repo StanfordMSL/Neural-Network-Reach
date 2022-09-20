@@ -1,5 +1,6 @@
 using Plots
 include("reach.jl")
+include("invariance.jl")
 
 # Returns H-rep of various input sets
 function input_constraints_random(weights, type::String)
@@ -51,10 +52,10 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-in_d, out_d, hdim, layers = 2, 1, 10, 2
+in_d, out_d, hdim, layers = 2, 2, 12, 3
 weights = random_net(in_d, out_d, hdim, layers) 
 
-Aᵢ, bᵢ = input_constraints_random(weights, "box")
+Aᵢ, bᵢ = input_constraints_random(weights, "big box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
@@ -69,6 +70,8 @@ end
 plt_in  = plot_hrep_random(ap2input)
 
 
+homeomorph = is_homeomorphism(ap2map, size(Aᵢ,2))
+println("PWA function is a homeomorphism: ", homeomorph)
 
 
 
