@@ -136,3 +136,55 @@ function pendulum_net(filename::String, copies::Int64)
 
 	return weights
 end
+
+
+#=
+Load pytorch networks saved as numpy variables.
+This function assumes the weights and normalization parameters are saved as follows:
+
+weights = []
+for name, param in model.named_parameters():
+    weights.append(param.detach().numpy())
+
+numpy.savez("weights.npz", *weights)
+numpy.savez("params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
+
+where:
+
+X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
+Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
+=#
+function pytorch_net(nn_weights, nn_params, copies::Int64)
+	W = npzread(nn_weights)
+	params = npzread(nn_params)
+
+	num_layers = Int(length(W)/2)
+	layer_sizes = params["layer_sizes"]
+
+	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
+	μᵢ = Float64.(vec(params["X_mean"]))
+	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
+	μₒ = Float64.(vec(params["Y_mean"]))
+	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
+	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
+
+	w = Vector{Array{Float64,2}}(undef, num_layers)
+	weight = W[string("arr_", 0)]*Aᵢₙ
+	bias   = W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ
+	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[1][end,end] = 1
+	for i in 2:(num_layers-1)
+		weight = W[string("arr_", 2*(i-1))]
+		bias   = W[string("arr_", 2*(i-1)+1)]
+		w[i] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]),1,:))
+		w[i][end,end] = 1
+	end
+
+	weight = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
+	bias   = Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ
+	w[end] = hcat(weight, vec(bias))
+
+	weights = chain_net(w, copies, num_layers)
+
+	return weights
+end
