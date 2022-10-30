@@ -8,7 +8,7 @@ function input_constraints_random(weights, type::String)
 		Aᵢ_pos = Matrix{Float64}(I, in_dim, in_dim)
 		Aᵢ_neg = Matrix{Float64}(-I, in_dim, in_dim)
 		Aᵢ = vcat(Aᵢ_pos, Aᵢ_neg)
-		bᵢ = 1e2*ones(2*in_dim)
+		bᵢ = 1e1*ones(2*in_dim)
 	elseif type == "box"
 		in_dim = size(weights[1],2) - 1
 		Aᵢ_pos = Matrix{Float64}(I, in_dim, in_dim)
@@ -26,7 +26,6 @@ end
 
 # Plots all polyhedra
 function plot_hrep_random(ap2constraints; limit=Inf)
-	# plt = plot(reuse = false, xlims=(-2,2), ylims=(-2,2))
 	plt = plot(reuse = false)
 	for (i, ap) in enumerate(keys(ap2constraints))
 		A, b = ap2constraints[ap]
@@ -35,7 +34,7 @@ function plot_hrep_random(ap2constraints; limit=Inf)
 			@show reg
 			error("Empty polyhedron.")
 		end
-		plot!(plt,  reg, fontfamily=font(14, "Computer Modern"), tickfont = (12))
+		plot!(plt,  reg, fontfamily=font(14, "Computer Modern"), tickfont = (12), xlims=(-10,10), ylims=(-10,10))
 		
 		i == limit ? (return plt) : nothing
 	end
@@ -69,17 +68,29 @@ end
 ###########################
 # using OrderedCollections # use if we care about plotting the tesselation incrementally
 
-in_d, out_d, hdim, layers = 2, 2, 10, 3
-weights = random_net(in_d, out_d, hdim, layers) 
+in_d, out_d, hdim, layers = 2, 2, 3, 3
+# weights = random_net(in_d, out_d, hdim, layers) 
+weights2 = deepcopy(weights)
+for (i,w) in enumerate(weights)
+	if i == 1
+		n_rows = size(w,1)
+		Γ = diagm(5*randn(n_rows))
+		Γ[end,end] = 1
+		weights2[i] = Γ*w
+	end
+end
 
-Aᵢ, bᵢ = input_constraints_random(weights, "box")
+Aᵢ, bᵢ = input_constraints_random(weights, "big box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
 @time begin
-ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
+ap2input, ap2output, ap2map, ap2backward = compute_reach(weights2, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
 end
 @show length(ap2input)
+
+# get V-rep
+# ap2vertices = get_vrep(ap2input)
 
 
 # Plot all regions (only 2D input) #
@@ -87,5 +98,9 @@ if in_d == 2
 	plt_in  = plot_hrep_random(ap2input, limit=Inf)
 end
 
-# Make Figure 1 for paper
+# Make Figure 1 for paper (requires ap2input and ap2output to be OrderedDict type)
 # plt = make_figure_1(ap2input, ap2output, [1, 60, Inf])
+
+# Test function save
+# using FileIO
+# test_dict = save("inverse/test_net.jld2", Dict("weights" => weights, "ap2input" => ap2input, "ap2map" => ap2map))

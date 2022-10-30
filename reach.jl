@@ -484,8 +484,8 @@ end
 # Supports looking for multiple backward reachable sets at once
 function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
 	# Construct necessary data structures #
-	ap2input    = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
-	ap2output   = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
+	ap2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
+	ap2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
 	ap2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
 	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
