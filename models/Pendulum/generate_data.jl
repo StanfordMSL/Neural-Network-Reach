@@ -4,7 +4,7 @@ using NPZ
 # dynamics from https://ocw.mit.edu/courses/2-04a-systems-and-controls-spring-2013/cec516593e76ea28d76655ab3b64f472_MIT2_04AS13_Lecture18.pdf
 
 # RK_f(x, u; m=1., l=1., b=1.) = [x[2], (u - b*x[2] - m*9.81*l*sin(x[1]))/(m*l^2)]
-RK_f(x, u; m=1., l=1.) = [x[2], (u + m*9.81*l*sin(x[1]))/(m*l^2)]
+RK_f(x, u; m=1., l=1.) = [x[2], (u + m*9.81*sin(x[1]))/(m*l)]
 
 
 function RK_update(x, u, dt)
