@@ -1,4 +1,4 @@
-using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib
+using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib, OrderedCollections
 include("load_networks.jl")
 include("unique_custom.jl")
 
@@ -29,6 +29,7 @@ function normalize_row(row::Vector{Float64})
 end
 
 # Returns the algorithm initialization point given task and input space constraints
+<<<<<<< Updated upstream
 function get_input(Aᵢ, bᵢ, weights)
 	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])
 	return input + 0.0001*randn(length(input))
@@ -41,6 +42,11 @@ function get_input(Aᵢ, bᵢ, weights)
 	# 	i += 1
 	# end
 	# return input
+=======
+function get_input(Aᵢ, bᵢ)
+	input = cheby_lp([], [], Aᵢ, bᵢ, [])[1]
+	return input + 0.0001*randn(length(input)) # random offset to avoid initializing on a boundary
+>>>>>>> Stashed changes
 end
 
 # checks whether input is on cell boundary
@@ -433,39 +439,48 @@ function poly_intersection(A₁, b₁, A₂, b₂; presolve=false)
 	end
 end
 
+
 # Find {y | Ax≤b and y=Cx+d} for the case where C is not invertible
+<<<<<<< Updated upstream
 function affine_map(A,b,C,d)
 	if rank(C) == length(d)
 		return A*inv(C), b + A*inv(C)*d
 	end
 
+=======
+# If this function fails it may be due to the forward reachable set being too small
+# i.e. C ≈ 0, then the reachable set will be ≈ d, which is just a point.
+function affine_map(A, b, C, d)
+>>>>>>> Stashed changes
 	xdim = size(A,2)
 	ydim = size(C,1)
-	A′ = vcat( hcat(I, -C), hcat(-I, C), hcat(zeros(length(b), ydim), A) )
-	b′ = vcat(d, -d, b)
+	invertible = (ydim == xdim) && (rank(C) == xdim)
+	
+	# compute ≈ chebyshev radius of reachable set
+	x_r = cheby_lp([], [], A, b, [])[4]
+	y_r = x_r*opnorm(C)
+	y_r < 1e-7 ? @warn("Forward reachable set is very small! Chebyshev radius ≈ ", y_r) : nothing
 
-	poly_in = polyhedron(hrep(A′,b′), CDDLib.Library(:float))
-	poly_out = eliminate(poly_in, collect(ydim+1:ydim+xdim), FourierMotzkin())
-	ine = unsafe_load(poly_out.ine.matrix)
-
-	numrow = ine.rowsize
-	numcol = ine.colsize
-	Aₒ = Matrix{Float64}(undef, numrow, numcol-1)
-	bₒ = Vector{Float64}(undef, numrow)
-	good_idxs = []
-	for i in 1:numrow
-		row = unsafe_load(ine.matrix, i)
-		bₒ[i] = unsafe_load(row, 1)
-		for j in 1:numcol-1
-			Aₒ[i,j] = -unsafe_load(row, j+1)
-		end
-		Aₒ[i,:] != zeros(numcol-1) ? push!(good_idxs, i) : nothing
+	# return Hrep of reachable set
+	if invertible
+		return A*inv(C), b + A*inv(C)*d
+	else
+		return project_vertices(A,b,C,d)
 	end
-
-	return Aₒ[good_idxs,:], bₒ[good_idxs]
 end
 
+# project polytope Ax≤b through map Cx+d
+# convert to Vrep -> find reachable Vrep -> convert to reachable Hrep
+# direct projection of the Hrep with Polyhedra and CDDLib was error-prone
+function project_vertices(A,b,C,d)
+	H = HPolytope(A,b)
+	V = convert(VPolytope, H)
+	Hreach = convert(HPolytope, C*V + d)
 
+	Aₒ = hcat([constraint.a for constraint in Hreach.constraints]...)'
+	bₒ = [constraint.b for constraint in Hreach.constraints]
+	return Aₒ, bₒ
+end
 
 
 
@@ -520,10 +535,14 @@ function cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
 		length(constraints)-2 != length(b)+length(bᵢ) ? (error("Not enough dual variables!")) : nothing
 		essential  = [i for i in 1:length(b) if abs(dual(constraints[i])) > 1e-4]
 		essentialᵢ = [i-length(b) for i in length(b)+1:length(constraints)-2 if abs(dual(constraints[i])) > 1e-4]
+<<<<<<< Updated upstream
 		if value.(r) == 1e4
 			println("Unbounded!")
 		end
 		return value.(x_c), essential, essentialᵢ
+=======
+		return value.(x_c), essential, essentialᵢ, value(r)
+>>>>>>> Stashed changes
 	elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
 		return cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, presolve=true)
 	else
@@ -597,7 +616,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		end
 		
 		# Uncomment these lines to double check generated ap is correct
-		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
+		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices)[1:3] # Chebyshev center
 		check_ap(center, weights, ap)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap])

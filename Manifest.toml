@@ -1,10 +1,16 @@
 # This file is machine-generated - editing it directly is not advised
 
+<<<<<<< Updated upstream
 [[AMD]]
 deps = ["Libdl", "LinearAlgebra", "SparseArrays", "Test"]
 git-tree-sha1 = "fc66ffc5cff568936649445f58a55b81eaf9592c"
 uuid = "14f7f29c-3bd6-536c-9a0b-7339e30b5a3e"
 version = "0.4.0"
+=======
+julia_version = "1.8.2"
+manifest_format = "2.0"
+project_hash = "4645944335431470994a87e73a33dab80421c8e2"
+>>>>>>> Stashed changes
 
 [[AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -110,11 +116,19 @@ git-tree-sha1 = "83bfd180e2f842f6d4ee315a6db8665e9aa0c19b"
 uuid = "052768ef-5323-5732-b1bb-66c8b64840ba"
 version = "1.3.3"
 
+<<<<<<< Updated upstream
 [[Calculus]]
 deps = ["LinearAlgebra"]
 git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
 uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
 version = "0.5.1"
+=======
+[[deps.Cairo_jll]]
+deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
+git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
+uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
+version = "1.16.1+1"
+>>>>>>> Stashed changes
 
 [[ChainRules]]
 deps = ["ChainRulesCore", "Compat", "LinearAlgebra", "Random", "Reexport", "Requires", "Statistics"]
@@ -426,7 +440,23 @@ git-tree-sha1 = "d796f7be0383b5416cd403420ce0af083b0f9b28"
 uuid = "4d00f742-c7ba-57c2-abde-4428a4b178cb"
 version = "0.8.5"
 
+<<<<<<< Updated upstream
 [[Grisu]]
+=======
+[[deps.Glib_jll]]
+deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Pkg", "Zlib_jll"]
+git-tree-sha1 = "d3b3624125c1474292d0d8ed0f65554ac37ddb23"
+uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
+version = "2.74.0+2"
+
+[[deps.Graphite2_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "344bf40dcab1073aca04aa0df4fb092f920e4011"
+uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
+version = "1.3.14+0"
+
+[[deps.Grisu]]
+>>>>>>> Stashed changes
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
@@ -580,9 +610,27 @@ version = "1.9.0+3"
 
 [[LibVPX_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+<<<<<<< Updated upstream
 git-tree-sha1 = "85fcc80c3052be96619affa2fe2e6d2da3908e11"
 uuid = "dd192d2f-8180-539f-9fb4-cc70b1dcf69a"
 version = "1.9.0+1"
+=======
+git-tree-sha1 = "c7cb1f5d892775ba13767a87c7ada0b980ea0a71"
+uuid = "94ce4f54-9a6c-5748-9c1c-f9c7231a4531"
+version = "1.16.1+2"
+
+[[deps.Libmount_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "9c30530bf0effd46e15e0fdcf2b8636e78cbbd73"
+uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
+version = "2.35.0+0"
+
+[[deps.Libtiff_jll]]
+deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "Pkg", "Zlib_jll", "Zstd_jll"]
+git-tree-sha1 = "3eb79b0ca5764d4799c06699573fd8f533259713"
+uuid = "89763e89-9b03-5906-acba-b20f662cd828"
+version = "4.4.0+0"
+>>>>>>> Stashed changes
 
 [[Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -831,6 +879,7 @@ git-tree-sha1 = "f9d953684d4d21e947cb6d642db18853d43cb027"
 uuid = "d330b81b-6aea-500a-939a-2ce795aea3ee"
 version = "2.11.0"
 
+<<<<<<< Updated upstream
 [[QDLDL]]
 deps = ["AMD", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "3d9d783667d3114f4d6c46a935e7f106aab68017"
@@ -842,6 +891,13 @@ deps = ["DataStructures", "LinearAlgebra"]
 git-tree-sha1 = "3c009334f45dfd546a16a57960a821a1a023d241"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 version = "2.5.0"
+=======
+[[deps.Qt5Base_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
+git-tree-sha1 = "0c03844e2231e12fda4d0086fd7cbe4098ee8dc5"
+uuid = "ea2cea3b-5b76-57ae-a6ef-0a8af62496e1"
+version = "5.15.3+2"
+>>>>>>> Stashed changes
 
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets"]

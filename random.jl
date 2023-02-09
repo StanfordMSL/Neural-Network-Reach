@@ -52,19 +52,51 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
+<<<<<<< Updated upstream
 in_d, out_d, hdim, layers = 2, 2, 12, 3
 weights = random_net(in_d, out_d, hdim, layers) 
+=======
+
+make_fig_1 = false
+
+in_d, out_d, hdim, layers = 2, 2, 10, 3
+
+if make_fig_1
+	in_d, out_d, hdim, layers = 2, 2, 10, 3
+	weights = random_net(in_d, out_d, hdim, layers)
+	
+	# modify weights to scale up output for nicer plot
+	for (i,w) in enumerate(weights)
+		if i == 1
+			n_rows = size(w,1)
+			Γ = diagm(50*randn(n_rows))
+			Γ[end,end] = 1
+			weights[i] = Γ*w
+		end
+	end
+else
+	in_d, out_d, hdim, layers = 2, 2, 10, 5
+	weights = random_net(in_d, out_d, hdim, layers)
+end
+>>>>>>> Stashed changes
 
 Aᵢ, bᵢ = input_constraints_random(weights, "big box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
 @time begin
+<<<<<<< Updated upstream
 ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=false)
 end
 @show length(ap2input)
 
 
+=======
+ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
+end
+@show length(ap2input)
+
+>>>>>>> Stashed changes
 
 # Plot all regions (only 2D input) #
 plt_in  = plot_hrep_random(ap2input)
@@ -77,5 +109,12 @@ println("PWA function is a homeomorphism: ", homeomorph)
 
 
 
+<<<<<<< Updated upstream
 # using FileIO
 # save("models/random/rand1.jld2", Dict("ap2input" => ap2input, "ap2vertices" => ap2vertices, "ap2map" => ap2map, "weights" => weights))
+=======
+# Make Figure 1 for paper (requires ap2input and ap2output to be OrderedDict type)
+if make_fig_1
+	plt_fig1 = make_figure_1(ap2input, ap2output, [1, 60, Inf])
+end
+>>>>>>> Stashed changes
