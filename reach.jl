@@ -29,24 +29,9 @@ function normalize_row(row::Vector{Float64})
 end
 
 # Returns the algorithm initialization point given task and input space constraints
-<<<<<<< Updated upstream
-function get_input(Aᵢ, bᵢ, weights)
-	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])
-	return input + 0.0001*randn(length(input))
-	# i = 1
-	# while !interior_input(input, weights)
-	# 	input += 1e-6*randn(size(Aᵢ,2))
-	# 	if i == 100
-	# 		error("Couldn't generate interior input.")
-	# 	end
-	# 	i += 1
-	# end
-	# return input
-=======
 function get_input(Aᵢ, bᵢ)
 	input = cheby_lp([], [], Aᵢ, bᵢ, [])[1]
 	return input + 0.0001*randn(length(input)) # random offset to avoid initializing on a boundary
->>>>>>> Stashed changes
 end
 
 # checks whether input is on cell boundary
@@ -441,17 +426,9 @@ end
 
 
 # Find {y | Ax≤b and y=Cx+d} for the case where C is not invertible
-<<<<<<< Updated upstream
-function affine_map(A,b,C,d)
-	if rank(C) == length(d)
-		return A*inv(C), b + A*inv(C)*d
-	end
-
-=======
 # If this function fails it may be due to the forward reachable set being too small
 # i.e. C ≈ 0, then the reachable set will be ≈ d, which is just a point.
 function affine_map(A, b, C, d)
->>>>>>> Stashed changes
 	xdim = size(A,2)
 	ydim = size(C,1)
 	invertible = (ydim == xdim) && (rank(C) == xdim)
@@ -535,14 +512,7 @@ function cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
 		length(constraints)-2 != length(b)+length(bᵢ) ? (error("Not enough dual variables!")) : nothing
 		essential  = [i for i in 1:length(b) if abs(dual(constraints[i])) > 1e-4]
 		essentialᵢ = [i-length(b) for i in length(b)+1:length(constraints)-2 if abs(dual(constraints[i])) > 1e-4]
-<<<<<<< Updated upstream
-		if value.(r) == 1e4
-			println("Unbounded!")
-		end
-		return value.(x_c), essential, essentialᵢ
-=======
 		return value.(x_c), essential, essentialᵢ, value(r)
->>>>>>> Stashed changes
 	elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
 		return cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, presolve=true)
 	else

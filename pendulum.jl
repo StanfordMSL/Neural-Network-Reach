@@ -72,15 +72,6 @@ end
 @show length(ap2input)
 
 # Plot all regions #
-<<<<<<< Updated upstream
-plt_in1  = plot_hrep_pendulum(state2input)
-# plt_in2  = plot_hrep_pendulum(state2backward[1])
-plt_out = plot_hrep_pendulum(state2output)
-
-
-# save("models/Pendulum/pendulum_pwa.jld2", Dict("state2input" => state2input, "state2map" => state2map, "Ai" => Aᵢ, "bi" => bᵢ))
-=======
 plt_in  = plot_hrep_pendulum(ap2input)
 plt_in_brs  = plot_hrep_pendulum(ap2backward[1])
 plt_out = plot_hrep_pendulum(ap2output)
->>>>>>> Stashed changes
