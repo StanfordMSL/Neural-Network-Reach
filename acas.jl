@@ -70,6 +70,7 @@ end
 # weights, nnet, net_dict = acas_net_nnet(5,6)
 weights = acas_net_nnet(5,7)
 
+
 property = "acas property 3"
 Aᵢ, bᵢ = input_constraints_acas(weights, property)
 Aₒ, bₒ = output_constraints_acas(weights, property)
@@ -77,6 +78,7 @@ Aₒ, bₒ = output_constraints_acas(weights, property)
 # Multiple backward reachability queries can be solved by specifying multiple output sets i.e. [Aₒ₁, Aₒ₂], [bₒ₁, bₒ₂]
 ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=false, back=false, verification=true)
 @show length(ap2input)
+# @show length(ap2backward[1])
 
 
 ## Solve for explicit policy ##

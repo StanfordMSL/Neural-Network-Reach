@@ -43,6 +43,7 @@ function plot_hrep_pendulum(ap2constraints)
 	plt = plot(reuse = false, legend=false, xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
 	for ap in keys(ap2constraints)
 		A, b = ap2constraints[ap]
+
 		reg = (180/π)*HPolytope(constraints_list(A,b)) # Convert from rad to deg for plotting
 		
 		if isempty(reg)
@@ -68,6 +69,7 @@ Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
 # Run algorithm
 @time begin
 ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=true, verification=false)
+
 end
 @show length(ap2input)
 
@@ -75,3 +77,4 @@ end
 plt_in  = plot_hrep_pendulum(ap2input)
 plt_in_brs  = plot_hrep_pendulum(ap2backward[1])
 plt_out = plot_hrep_pendulum(ap2output)
+

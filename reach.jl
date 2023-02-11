@@ -5,16 +5,14 @@ include("unique_custom.jl")
 ϵ = 1e-10 # used for numerical tolerances throughout
 
 ### GENERAL PURPOSE FUNCTIONS ###
-function normalize_row_old(row::Vector{Float64}; return_zero=false)
-	for i in 1:length(row)
-		if abs(row[i]) > 1e-12 # ith element nonzero
-			return row ./ abs(row[i]) 
-		elseif i == length(row) && return_zero
-			return zeros(length(row))
-		elseif i == length(row)
-			@show row
-			error("Rethink how you normalize rows!")
-		end
+
+function normalize_row(row::Vector{Float64})
+	scale = norm(row[1:end-1])
+	size = length(row)-1
+	if scale > ϵ
+		return row / scale
+	else
+		return vcat(zeros(size), [row[end]])
 	end
 end
 
@@ -31,6 +29,7 @@ end
 # Returns the algorithm initialization point given task and input space constraints
 function get_input(Aᵢ, bᵢ)
 	input = cheby_lp([], [], Aᵢ, bᵢ, [])[1]
+
 	return input + 0.0001*randn(length(input)) # random offset to avoid initializing on a boundary
 end
 
@@ -63,8 +62,8 @@ end
 
 # Given constraint index, return associated layer and neuron
 function get_layer_neuron(index, ap)
-	layer, neuron, prev = (1, 1, 0)
-	for l in 1:length(ap)
+	prev = 0
+	for l in eachindex(ap)
 		if index > length(ap[l]) + prev
 			prev += length(ap[l])
 		else
@@ -74,12 +73,13 @@ function get_layer_neuron(index, ap)
 end
 
 # Get hyperplane equation associated with a given neuron and input
-function neuron_map(layer, neuron, ap, weights; normalize=true)
+function neuron_map(layer, neuron, ap, weights; normalize=false)
 	matrix = I 
 	for l in 1:layer-1
 		matrix = diagm(0 => ap[l])*weights[l]*matrix
 	end
 	matrix = weights[layer]*matrix
+	
 	if normalize
 		return normalize_row(matrix[neuron,:])
 	else
@@ -139,7 +139,7 @@ function get_constraints(weights::Vector{Matrix{Float64}}, ap::Vector{BitVector}
 	for layer in 1:L-1
 		output = weights[layer]*lin_map
 		for neuron in 1:length(ap[layer])
-			A[i,:] = (1-2*ap[layer][neuron])*output[neuron,:]
+			A[i,:] = (1-2*ap[layer][neuron]) * output[neuron,:]
 			if !isapprox(A[i,1:end-1], zeros(size(A,2)-1), atol=ϵ) # check nonzero.
 				A[i,:] = normalize_row(A[i,:])
 			else
@@ -160,7 +160,6 @@ function get_constraints(weights::Vector{Matrix{Float64}}, ap::Vector{BitVector}
 
 	return A[:,1:end-1], -A[:,end], idx2repeat, zerows, unique_nonzerow_indices
 end
-
 
 
 
@@ -198,7 +197,6 @@ function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential)
 
 end
 
-# Heuristic for finding redundant constraints: finds upper and lower bounds for each component of x given Ax≤b
 function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
 	redundant = Vector{Int64}()
 	redundantᵢ = Vector{Int64}()
@@ -227,12 +225,13 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 
 	# Find redundant constraints
 	for i in unique_nonzerow_indices
-		val = sum([A[i,j] > 0 ? A[i,j]*bounds[j,2] : A[i,j]*bounds[j,1] for j in 1:size(A,2)])
+		val = sum([A[i,j] > 0 ? A[i,j]*bounds[j,2] : A[i,j]*bounds[j,1] for j in axes(A,2)])
 		val + ϵ < b[i]  ? push!(redundant,i) : nothing
 	end
 	if bᵢ != []
-		for i in length(bᵢ)
-			val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in 1:size(Aᵢ,2)])
+
+		for i in eachindex(bᵢ)
+			val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in axes(Aᵢ,2)])
 			val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
 		end
 	end
@@ -304,18 +303,18 @@ end
 
 
 
+
 ### FUNCTIONS FOR FINDING NEIGHBORS ###
 # Adds neighbor aps to working_set
 function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential, ap2neighbors; graph=false)	
 	for idx in neighbor_indices
 		neighbor_ap = deepcopy(ap)
 		l, n = get_layer_neuron(idx, neighbor_ap)
-		neighbor_constraint = -(1-2*neighbor_ap[l][n])*normalize_row(neuron_map(l, n, neighbor_ap, weights)) # constraint for c′
+		neighbor_constraint = -(1-2*neighbor_ap[l][n])*neuron_map(l, n, neighbor_ap, weights, normalize=true) # constraint for c′
 
 		type1 = idx2repeat[idx]
 		type2 = zerows
 		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
-
 		
 		if graph
 			if !haskey(ap2neighbors, ap)
@@ -331,7 +330,6 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 			end
 		end
 
-		
 		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set # if I haven't explored it && it's not yet in the working set
 			push!(working_set, neighbor_ap)
 			ap2essential[neighbor_ap] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
@@ -349,29 +347,12 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 
 	for neuron_idx in sort(vcat(type1, type2))
 		l, n = get_layer_neuron(neuron_idx, neighbor_ap)
-		new_map = (1-2*neighbor_ap[l][n])*normalize_row(neuron_map(l, n, neighbor_ap, weights))
+		new_map = (1-2*neighbor_ap[l][n])*neuron_map(l, n, neighbor_ap, weights, normalize=true)
 		a′, b′ = new_map[1:end-1], -new_map[end] 
-		
-		# now we check whether a′⋅x ≤ b′ is valid, or if we need to flip the activation such that a′⋅x ≥ b′
-		if isapprox(a′, zeros(length(a′)), atol=ϵ )
-			if b′ ≥ 0 # ⟹ 0⋅x ≤ b′ is then always satisfied, thus valid
-				nothing
-			else # 0⋅x ≤ b′ is then never satisfied, thus invalid
-				neighbor_ap[l][n] = !neighbor_ap[l][n]
-			end 
-		# elseif neuron_idx ∈ type1
-		# 	neighbor_ap[l][n] = !neighbor_ap[l][n]
-		elseif isapprox(a′, a, atol=ϵ ) && b′ ≥ b 
-			nothing
-		elseif isapprox(a′, a, atol=ϵ ) && b′ < b
+
+		if isapprox(a′, -a, atol=ϵ ) && isapprox(b′, -b, atol=ϵ )
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ < b
-			nothing
-		elseif isapprox(-a′, a, atol=ϵ ) && -b′ ≥ b
-			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		else
-			error("Check neuron flipping rules.")
-		end
+		end	
 	end
 
 	return neighbor_ap
@@ -493,14 +474,14 @@ function cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
 	@variable(model, x_c[1:dim])
 	@objective(model, Max, r)
 
-	for i in 1:length(b)
+	for i in eachindex(b)
 		if i ∈ unique_nonzerow_indices
 			@constraint(model, dot(A[i,:],x_c) + r*norm(A[i,:]) ≤ b[i])
 		else
 			@constraint(model, 0*r ≤ 0) # non-constraint so we have a dual variable for each index in A
 		end
 	end
-	for i in 1:length(bᵢ)
+	for i in eachindex(bᵢ)
 		@constraint(model, dot(Aᵢ[i,:],x_c) + r*norm(Aᵢ[i,:]) ≤ bᵢ[i]) # superset constraints
 	end
 	@constraint(model,  r ≤ 1e4) # prevents unboundedness
@@ -546,8 +527,8 @@ end
 # Supports looking for multiple backward reachable sets at once
 function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; fp = [], reach=false, back=false, verification=false, connected=false, graph=false)
 	# Construct necessary data structures #
-	ap2input    = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
-	ap2output   = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
+	ap2input    = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
+	ap2output   = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
 	ap2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
 	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
@@ -558,7 +539,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)
-	num_neurons = sum([length(ap[layer]) for layer in 1:length(ap)])
+	num_neurons = sum([length(ap[layer]) for layer in eachindex(ap)])
 	
 	# Begin cell enumeration #
 	i, saved_lps, solved_lps, rank_deficient = (1, 0, 0, 0)

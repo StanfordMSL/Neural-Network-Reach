@@ -20,6 +20,7 @@ bound_r(a,b) = (b-a)*(rand()-1) + b
 
 ```Generate random neural network with Kaiming initialization```
 function random_net(in_d, out_d, hdim, layers)
+	α = sqrt(2/515)
 	Weights = Vector{Array{Float64,2}}(undef,layers)
 	r_weight = sqrt(2/515)*(2*rand(hdim, in_d) - rand(hdim, in_d))
 	r_bias   = sqrt(2/515)*(2*rand(hdim, 1) - rand(hdim, 1))
@@ -33,6 +34,7 @@ function random_net(in_d, out_d, hdim, layers)
 	end
 	r_weight = sqrt(2/515)*(2*rand(out_d, hdim) - rand(out_d, hdim))
 	r_bias   = sqrt(2/515)*(2*rand(out_d, 1) - rand(out_d, 1))
+
 	Weights[end] = hcat(r_weight, r_bias)
 	return Weights
 end
@@ -232,6 +234,7 @@ function pytorch_mpc_net(model, copies::Int64)
 	layer_sizes[end] = layer_sizes[1]
 
 	weights = chain_net(w, copies, num_layers)
+
 	return weights
 end
 
@@ -302,4 +305,5 @@ function taxinet_2input_resid()
 		end
 	end
 	return net_a
+
 end
