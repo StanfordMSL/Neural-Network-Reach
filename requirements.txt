@@ -1,9 +1,3 @@
-<<<<<<< Updated upstream
 torch
 torchvision
 matplotlib
-=======
-torch
-torchvision
-matplotlib
->>>>>>> Stashed changes

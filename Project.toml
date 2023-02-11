@@ -1,5 +1,4 @@
 [deps]
-AlphaStructures = "b34a2d8f-0989-4844-9314-dd3cff8ff09b"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CDDLib = "3391f64e-dcde-5f30-b752-e11513730f60"
 COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"

@@ -24,7 +24,7 @@ function input_constraints_pendulum(weights, type::String)
 end
 
 # Returns H-rep of various output sets
-function output_constraints_pendulum(weights, type::String)
+function output_constraints_pendulum(type::String)
 	# Each output specification is in the form Ayₒᵤₜ≤b
 	# The raw network outputs are unnormalized: yₒᵤₜ = Aₒᵤₜy + bₒᵤₜ
 	# Thus the output constraints for raw network outputs are: A*Aₒᵤₜ*y ≤ b - A*bₒᵤₜ
@@ -39,10 +39,10 @@ end
 
 
 # Plot all polytopes
-function plot_hrep_pendulum(state2constraints)
+function plot_hrep_pendulum(ap2constraints)
 	plt = plot(reuse = false, legend=false, xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
-	for state in keys(state2constraints)
-		A, b = state2constraints[state]
+	for ap in keys(ap2constraints)
+		A, b = ap2constraints[ap]
 		reg = (180/π)*HPolytope(constraints_list(A,b)) # Convert from rad to deg for plotting
 		
 		if isempty(reg)
@@ -72,22 +72,18 @@ Ab = matread("models/Pendulum/cntrl_invariant.mat")["Ab"]
 A_ctrl, b_ctrl = Ab[:,1:2], Ab[:,3]
 
 Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum")
-Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
+Aₒ, bₒ = output_constraints_pendulum("origin")
 
 # Run algorithm
-# @time begin
-# state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
-# end
-# @show length(state2input)
+@time begin
+ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ])
+end
+@show length(ap2input)
 
 # Plot all regions #
-# plt_in1  = plot_hrep_pendulum(state2input)
-# plt_in2  = plot_hrep_pendulum(state2backward[1])
-# plt_out = plot_hrep_pendulum(state2output)
+# plt_in1  = plot_hrep_pendulum(ap2input)
+# plt_in2  = plot_hrep_pendulum(ap2backward[1])
+# plt_out = plot_hrep_pendulum(ap2output)
 # plot((180/π)*HPolytope(constraints_list(A_ctrl, b_ctrl)), reuse = false, legend=false, title="Control Invariant Set", xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
-
-
-# save("models/Pendulum/pendulum_controlled_pwa.jld2", Dict("state2input" => state2input, "state2map" => state2map, "Ai" => Aᵢ, "bi" => bᵢ))
-
 
 

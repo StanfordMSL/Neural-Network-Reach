@@ -157,7 +157,7 @@ function solve_sdp_jump(Fₒ, C)
 	@objective(model, Min, 0)
 	
 	@constraint(model, Q*Fₒ*C - R'*Fₒ .== zeros(n_cons, dim))
-	@SDconstraint(model, [Q R; R' Q] ≥ 0)
+	@constraint(model, [Q R; R' Q] ≥ 0, PSDCone())
 	@constraint(model, Q_diag .≥ 10.0*ones(n_cons))
 	# @constraint(model, Q_diag .≤ 1e6*ones(n_cons))
 	@constraint(model, R .≥ zeros(n_cons, n_cons))

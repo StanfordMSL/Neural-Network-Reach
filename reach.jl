@@ -258,7 +258,7 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 				push!(essential, i)
 			end
 		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
-			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, true)
+			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ; presolve=true)
 		else
 			@show termination_status(model)
 			println("Dual infeasible implies that primal is unbounded.")
@@ -554,7 +554,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	ap2neighbors = Dict{Vector{BitVector}, Vector{Vector{BitVector}}}() # Dict from ap to vector of neighboring aps
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
 	# Initialize algorithm #
-	fp == [] ? input = get_input(Aᵢ, bᵢ, weights) : input = fp # this may fail if initialized on the boundary of a cell
+	fp == [] ? input = get_input(Aᵢ, bᵢ) : input = fp # this may fail if initialized on the boundary of a cell
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)
@@ -568,7 +568,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 
 		# Get local affine_map
 		C, d = local_map(ap, weights)
-		rank(C) != length(d) ? rank_deficient += 1 : nothing
+		rank(C) != min(size(C)...) ? rank_deficient += 1 : nothing
 		ap2map[ap] = (C,d)
 
 		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, ap, num_neurons)
