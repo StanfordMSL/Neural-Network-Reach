@@ -1,10 +1,21 @@
-using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib
+using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib, OrderedCollections
 include("load_networks.jl")
 include("unique_custom.jl")
 
 ϵ = 1e-10 # used for numerical tolerances throughout
 
 ### GENERAL PURPOSE FUNCTIONS ###
+
+function normalize_row(row::Vector{Float64})
+	scale = norm(row[1:end-1])
+	size = length(row)-1
+	if scale > ϵ
+		return row / scale
+	else
+		return vcat(zeros(size), [row[end]])
+	end
+end
+
 function normalize_row(row::Vector{Float64})
 	scale = norm(row[1:end-1])
 	size = length(row)-1
@@ -17,9 +28,25 @@ end
 
 # Returns the algorithm initialization point given task and input space constraints
 function get_input(Aᵢ, bᵢ)
-	input, nothing, nothing = cheby_lp([], [], Aᵢ, bᵢ, [])	
+	input = cheby_lp([], [], Aᵢ, bᵢ, [])[1]
+
 	return input + 0.0001*randn(length(input)) # random offset to avoid initializing on a boundary
 end
+
+# checks whether input is on cell boundary
+# an input is on a cell boundary if any postactivation variable z is zero
+function interior_input(input, weights)
+	NN_out = vcat(input, [1.])
+    for layer = 1:length(weights)-1
+    	ẑ = weights[layer]*NN_out
+    	for i in 1:length(ẑ)
+    		isapprox(ẑ[i], 0.0, atol=ϵ) ? (return false) : nothing
+    	end
+        NN_out = max.(0, ẑ)
+    end
+    return true
+end
+
 
 # Given input point, perform forward pass to get ap.
 function get_ap(input, weights)
@@ -202,6 +229,7 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 		val + ϵ < b[i]  ? push!(redundant,i) : nothing
 	end
 	if bᵢ != []
+
 		for i in eachindex(bᵢ)
 			val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in axes(Aᵢ,2)])
 			val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
@@ -229,7 +257,7 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 				push!(essential, i)
 			end
 		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
-			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, presolve=true)
+			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ; presolve=true)
 		else
 			@show termination_status(model)
 			println("Dual infeasible implies that primal is unbounded.")
@@ -278,7 +306,7 @@ end
 
 ### FUNCTIONS FOR FINDING NEIGHBORS ###
 # Adds neighbor aps to working_set
-function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential)	
+function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}, working_set, idx2repeat::Dict{Int64,Vector{Int64}}, zerows::Vector{Int64}, weights::Vector{Matrix{Float64}}, ap2essential, ap2neighbors; graph=false)	
 	for idx in neighbor_indices
 		neighbor_ap = deepcopy(ap)
 		l, n = get_layer_neuron(idx, neighbor_ap)
@@ -287,7 +315,21 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 		type1 = idx2repeat[idx]
 		type2 = zerows
 		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
-	
+		
+		if graph
+			if !haskey(ap2neighbors, ap)
+				ap2neighbors[ap] = [neighbor_ap]
+			elseif neighbor_ap ∉ ap2neighbors[ap]
+				push!(ap2neighbors[ap], neighbor_ap)
+			end
+
+			if !haskey(ap2neighbors, neighbor_ap)
+				ap2neighbors[neighbor_ap] = [ap]
+			elseif ap ∉ ap2neighbors[neighbor_ap]
+				push!(ap2neighbors[neighbor_ap], ap)
+			end
+		end
+
 		if !haskey(ap2essential, neighbor_ap) && neighbor_ap ∉ working_set # if I haven't explored it && it's not yet in the working set
 			push!(working_set, neighbor_ap)
 			ap2essential[neighbor_ap] = idx2repeat[idx] # All of the neurons that define the neighbor constraint
@@ -363,39 +405,40 @@ function poly_intersection(A₁, b₁, A₂, b₂; presolve=false)
 	end
 end
 
-# Find {y | Ax≤b and y=Cx+d} for the case where C is not invertible
-function affine_map(A, b, C, d)
-	if rank(C) == length(d)
-		return A*inv(C), b + A*inv(C)*d
-	end
 
+# Find {y | Ax≤b and y=Cx+d} for the case where C is not invertible
+# If this function fails it may be due to the forward reachable set being too small
+# i.e. C ≈ 0, then the reachable set will be ≈ d, which is just a point.
+function affine_map(A, b, C, d)
 	xdim = size(A,2)
 	ydim = size(C,1)
-	A′ = vcat( hcat(I, -C), hcat(-I, C), hcat(zeros(length(b), ydim), A) )
-	b′ = vcat(d, -d, b)
+	invertible = (ydim == xdim) && (rank(C) == xdim)
+	
+	# compute ≈ chebyshev radius of reachable set
+	x_r = cheby_lp([], [], A, b, [])[4]
+	y_r = x_r*opnorm(C)
+	y_r < 1e-7 ? @warn("Forward reachable set is very small! Chebyshev radius ≈ ", y_r) : nothing
 
-	poly_in = polyhedron(hrep(A′,b′), CDDLib.Library(:float))
-	poly_out = eliminate(poly_in, collect(ydim+1:ydim+xdim), FourierMotzkin())
-	ine = unsafe_load(poly_out.ine.matrix)
-
-	numrow = ine.rowsize
-	numcol = ine.colsize
-	Aₒ = Matrix{Float64}(undef, numrow, numcol-1)
-	bₒ = Vector{Float64}(undef, numrow)
-	good_idxs = []
-	for i in 1:numrow
-		row = unsafe_load(ine.matrix, i)
-		bₒ[i] = unsafe_load(row, 1)
-		for j in 1:numcol-1
-			Aₒ[i,j] = -unsafe_load(row, j+1)
-		end
-		Aₒ[i,:] != zeros(numcol-1) ? push!(good_idxs, i) : nothing
+	# return Hrep of reachable set
+	if invertible
+		return A*inv(C), b + A*inv(C)*d
+	else
+		return project_vertices(A,b,C,d)
 	end
-
-	return Aₒ[good_idxs,:], bₒ[good_idxs]
 end
 
+# project polytope Ax≤b through map Cx+d
+# convert to Vrep -> find reachable Vrep -> convert to reachable Hrep
+# direct projection of the Hrep with Polyhedra and CDDLib was error-prone
+function project_vertices(A,b,C,d)
+	H = HPolytope(A,b)
+	V = convert(VPolytope, H)
+	Hreach = convert(HPolytope, C*V + d)
 
+	Aₒ = hcat([constraint.a for constraint in Hreach.constraints]...)'
+	bₒ = [constraint.b for constraint in Hreach.constraints]
+	return Aₒ, bₒ
+end
 
 
 
@@ -450,7 +493,7 @@ function cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
 		length(constraints)-2 != length(b)+length(bᵢ) ? (error("Not enough dual variables!")) : nothing
 		essential  = [i for i in 1:length(b) if abs(dual(constraints[i])) > 1e-4]
 		essentialᵢ = [i-length(b) for i in length(b)+1:length(constraints)-2 if abs(dual(constraints[i])) > 1e-4]
-		return value.(x_c), essential, essentialᵢ
+		return value.(x_c), essential, essentialᵢ, value(r)
 	elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
 		return cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, presolve=true)
 	else
@@ -482,17 +525,17 @@ end
 # Given input point and weights return ap2input, ap2output, ap2map, plt_in, plt_out
 # set reach=false for just cell enumeration
 # Supports looking for multiple backward reachable sets at once
-function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; reach=false, back=false, verification=false)
+function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; fp = [], reach=false, back=false, verification=false, connected=false, graph=false)
 	# Construct necessary data structures #
 	ap2input    = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
 	ap2output   = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
 	ap2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
 	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
+	ap2neighbors = Dict{Vector{BitVector}, Vector{Vector{BitVector}}}() # Dict from ap to vector of neighboring aps
 	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
-
 	# Initialize algorithm #
-	input = get_input(Aᵢ, bᵢ)
+	fp == [] ? input = get_input(Aᵢ, bᵢ) : input = fp # this may fail if initialized on the boundary of a cell
 	ap = get_ap(input, weights)
 	ap2essential[ap] = Vector{Int64}()
 	push!(working_set, ap)
@@ -506,7 +549,7 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 
 		# Get local affine_map
 		C, d = local_map(ap, weights)
-		rank(C) != length(d) ? rank_deficient += 1 : nothing
+		rank(C) != min(size(C)...) ? rank_deficient += 1 : nothing
 		ap2map[ap] = (C,d)
 
 		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, ap, num_neurons)
@@ -524,23 +567,36 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 		end
 		
 		# Uncomment these lines to double check generated ap is correct
-		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # Chebyshev center
+		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices)[1:3] # Chebyshev center
 		check_ap(center, weights, ap)
 
 		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap])
-		working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential)
-		ap2input[ap] = (A,b)
+
 
 		reach ? ap2output[ap] = affine_map(A, b, C, d) : nothing
-		if back
+		if back && connected # only add neighbors of cells that are in the BRS
+			for k in 1:length(Aₒ)
+				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
+				if poly_intersection(A, b, Aᵤ, bᵤ)
+					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
+					working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
+				end
+			end
+		elseif back # add neighbors of all cells
 			for k in 1:length(Aₒ)
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
 					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
 				end
 			end
+			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
+		else
+			# add neighbors of all cells
+			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
 		end
-
+		# ap2input[ap] = (vcat(A, Aᵢ), vcat(b, bᵢ))
+		ap2input[ap] = (A, b)
+		
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end
 	verification ? println("No input maps to the target set.") : nothing
@@ -548,6 +604,10 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	total_lps = saved_lps + solved_lps
 	println("Total solved LPs: ", solved_lps)
 	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
-	return ap2input, ap2output, ap2map, ap2backward
-end
 
+	if graph
+		return ap2input, ap2output, ap2map, ap2backward, ap2neighbors
+	else
+		return ap2input, ap2output, ap2map, ap2backward
+	end
+end

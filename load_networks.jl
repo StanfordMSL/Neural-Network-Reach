@@ -22,18 +22,19 @@ bound_r(a,b) = (b-a)*(rand()-1) + b
 function random_net(in_d, out_d, hdim, layers)
 	α = sqrt(2/515)
 	Weights = Vector{Array{Float64,2}}(undef,layers)
-	r_weight = α*(2*rand(hdim, in_d) - rand(hdim, in_d))
-	r_bias   = α*(2*rand(hdim, 1) - rand(hdim, 1))
+	r_weight = sqrt(2/515)*(2*rand(hdim, in_d) - rand(hdim, in_d))
+	r_bias   = sqrt(2/515)*(2*rand(hdim, 1) - rand(hdim, 1))
 	Weights[1] = vcat(hcat(r_weight, r_bias), reshape(zeros(1+in_d),1,:))
 	Weights[1][end,end] = 1
 	for i in 2:layers-1
-		r_weight = α*(2*rand(hdim, hdim) - rand(hdim, hdim))
-		r_bias   = α*(2*rand(hdim, 1) - rand(hdim, 1))
+		r_weight = sqrt(2/515)*(2*rand(hdim, hdim) - rand(hdim, hdim))
+		r_bias   = sqrt(2/515)*(2*rand(hdim, 1) - rand(hdim, 1))
 		Weights[i] = vcat(hcat(r_weight, r_bias), reshape(zeros(1+hdim),1,:))
 		Weights[i][end,end] = 1
 	end
-	r_weight = α*(2*rand(out_d, hdim) - rand(out_d, hdim))
-	r_bias   = α*(2*rand(out_d, 1) - rand(out_d, 1))
+	r_weight = sqrt(2/515)*(2*rand(out_d, hdim) - rand(out_d, hdim))
+	r_bias   = sqrt(2/515)*(2*rand(out_d, 1) - rand(out_d, 1))
+
 	Weights[end] = hcat(r_weight, r_bias)
 	return Weights
 end
@@ -138,22 +139,8 @@ function pendulum_net(filename::String, copies::Int64)
 end
 
 
-#=
-Load pytorch networks saved as numpy variables.
-This function assumes the weights and normalization parameters are saved as follows:
-
-weights = []
-for name, param in model.named_parameters():
-    weights.append(param.detach().numpy())
-
-numpy.savez("weights.npz", *weights)
-numpy.savez("params.npz", X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std, layer_sizes=layer_sizes)
-
-where:
-
-X_mean, X_std = numpy.mean(X, axis=0), numpy.std(X, axis=0)
-Y_mean, Y_std = numpy.mean(Y, axis=0), numpy.std(Y, axis=0)
-=#
+## CHANGE THIS ##
+``` Load pytorch networks saved as numpy variables ```
 function pytorch_net(nn_weights, nn_params, copies::Int64)
 	W = npzread(nn_weights)
 	params = npzread(nn_params)
@@ -187,4 +174,136 @@ function pytorch_net(nn_weights, nn_params, copies::Int64)
 	weights = chain_net(w, copies, num_layers)
 
 	return weights
+end
+
+
+```
+Load pytorch networks that are controllers for linear MPC models
+I apply the dynamics A matrix in the first layer to try to avoid hyperplanes through the origin
+```
+function pytorch_mpc_net(model, copies::Int64)
+	W = npzread(string("models/", model, "/weights.npz"))
+	params = npzread(string("models/", model, "/norm_params.npz"))
+
+	# x_+ = Ax + Bu
+	A = [1.2 1.2; 0.0 1.2]
+	B = reshape([1.0, 0.4], (2,1))
+
+	num_layers = Int(length(W)/2)
+	layer_sizes = params["layer_sizes"]
+
+	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
+	μᵢ = Float64.(vec(params["X_mean"]))
+	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
+	μₒ = Float64.(vec(params["Y_mean"]))
+	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
+	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
+
+	# make identity weights
+	sze = layer_sizes[1]
+	II = Matrix{Float64}(I, sze, sze)
+	# w_I1 = [A; -A]
+	w_I1 = [II; -II]
+	w_Im = [II -II; -II II]
+	b_I = zeros(2*sze)
+
+	# make single network augmented weights
+	w = Vector{Array{Float64,2}}(undef, num_layers)
+	weight = vcat(W[string("arr_", 0)]*Aᵢₙ, w_I1)
+	bias   = vcat(W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ, b_I)
+	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
+	w[1][end,end] = 1
+	for i in 2:(num_layers-1)
+		weight = vcat(W[string("arr_", 2*(i-1))], zeros(2*sze,layer_sizes[i]))
+		weight = hcat(weight, vcat(zeros(layer_sizes[i+1],2*sze), w_Im))
+		bias   = vcat(W[string("arr_", 2*(i-1)+1)], b_I)
+		w[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]+2*sze),1,:))
+		w[i][end,end] = 1
+	end
+	
+	weight = B*Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
+	# weight = hcat(weight, [II -II])
+	weight = hcat(weight, [A -A])
+	bias   = B*(Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ)
+	w[end] = hcat(weight, vec(bias))
+
+	# change layer sizes to be correct for this new network
+	for i in 2:length(layer_sizes)-1
+		layer_sizes[i] += 2*sze 
+	end
+	layer_sizes[end] = layer_sizes[1]
+
+	weights = chain_net(w, copies, num_layers)
+
+	return weights
+end
+
+
+# load in all taxinet networks to make closed-loop network
+# Need to change
+function taxinet_cl(copies::Int64)
+	net_a = taxinet_2input_resid() # x -> [u; x]
+	net_b = pytorch_net("models/taxinet/weights_dynamics_5hz.npz", "models/taxinet/norm_params_dynamics_5hz.npz", 1) # [u; x] -> x′
+
+	len_a = length(net_a)
+	len_b = length(net_b)
+
+	w = Vector{Array{Float64,2}}(undef, len_a + len_b -1)
+	for i in 1:len_a-1
+		w[i] = net_a[i]
+	end
+
+	# Connect the networks
+	w_temp_a = vcat(net_a[end], reshape(zeros(size(net_a[end],2)),1,:))
+	w_temp_a[end,end] = 1
+	w[len_a] = net_b[1] * w_temp_a
+
+	for i in len_a + 1:length(w)
+		w[i] = net_b[i - len_a + 1]
+	end
+
+	weights = chain_net(w, copies, length(w))
+	return weights
+end
+
+
+
+
+function taxinet_2input_resid()
+	# net a is x -> x_est
+	# want it to be x -> u, x    where u = [-0.74, -0.44]⋅x_est
+	net_a = nnet_load("models/taxinet/full_mlp_supervised_2input_0.nnet")
+	len_a = length(net_a)
+	II = Matrix{Float64}(I, 2, 2)
+
+	for i in 1:len_a
+		if i == 1
+			loc = 1:2
+			net_a[i] = vcat(net_a[i], zeros(4, size(net_a[i],2)))
+			net_a[i][end-4:end-1, loc] = [II; -II]
+			net_a[i][end-4:end-1, end] = zeros(4)
+			net_a[i][end,end] = 1
+		elseif i == len_a
+			loc = size(net_a[i-1],1) - 4 : size(net_a[i-1],1) - 1 # index collection for augmented indices
+			temp = zeros(3, size(net_a[i],2)+4)
+			weight_rows, weight_cols = 1:size(net_a[i],1), 1:size(net_a[i],2)-1
+			w = net_a[i][weight_rows, weight_cols]
+			b = net_a[i][:, end]
+			temp[1, 1:end-5] = reshape(w'*[-0.74, -0.44], 1, :) # add in weights
+			temp[1, end] = b⋅[-0.74, -0.44]
+			temp[2:3, loc] = [II -II]
+			net_a[i] = temp
+		else 
+			loc = size(net_a[i-1],1) - 4 : size(net_a[i-1],1) - 1 # index collection for augmented indices
+			temp = zeros(size(net_a[i],1)+4, size(net_a[i],2)+4)
+			weight_rows, weight_cols = 1:size(net_a[i],1)-1, 1:size(net_a[i],2)-1
+			temp[weight_rows, weight_cols] = net_a[i][weight_rows, weight_cols] # add in weights
+			temp[1:end-1, end] = vcat(net_a[i][1:end-1,end], zeros(4)) # new bias
+			temp[end-4:end-1, loc] = [II -II; -II II]
+			temp[end,end] = 1
+			net_a[i] = temp
+		end
+	end
+	return net_a
+
 end

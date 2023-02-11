@@ -39,10 +39,11 @@ end
 
 
 # Plot all polytopes
-function plot_hrep_pendulum(state2constraints)
+function plot_hrep_pendulum(ap2constraints)
 	plt = plot(reuse = false, legend=false, xlabel="Angle (deg.)", ylabel="Angular Velocity (deg./s.)")
-	for state in keys(state2constraints)
-		A, b = state2constraints[state]
+	for ap in keys(ap2constraints)
+		A, b = ap2constraints[ap]
+
 		reg = (180/π)*HPolytope(constraints_list(A,b)) # Convert from rad to deg for plotting
 		
 		if isempty(reg)
@@ -60,7 +61,6 @@ end
 ###########################
 copies = 50 # copies = 1 is original network
 model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
-
 weights = pendulum_net(model, copies)
 
 Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum")
@@ -68,13 +68,13 @@ Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
 
 # Run algorithm
 @time begin
-state2input, state2output, state2map, state2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
+ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=true, verification=false)
+
 end
-@show length(state2input)
+@show length(ap2input)
 
 # Plot all regions #
-plt_in1  = plot_hrep_pendulum(state2input)
-# plt_in2  = plot_hrep_pendulum(state2backward[1])
-plt_out = plot_hrep_pendulum(state2output)
-
+plt_in  = plot_hrep_pendulum(ap2input)
+plt_in_brs  = plot_hrep_pendulum(ap2backward[1])
+plt_out = plot_hrep_pendulum(ap2output)
 

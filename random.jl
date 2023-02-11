@@ -1,5 +1,6 @@
 using Plots
 include("reach.jl")
+include("invariance.jl")
 
 # Returns H-rep of various input sets
 function input_constraints_random(weights, type::String)
@@ -25,10 +26,10 @@ function input_constraints_random(weights, type::String)
 end
 
 # Plots all polyhedra
-function plot_hrep_random(ap2constraints; limit=Inf)
-	# plt = plot(reuse = false, xlims=(-2,2), ylims=(-2,2))
+function plot_hrep_random(ap2constraints)
 	plt = plot(reuse = false)
-	for (i, ap) in enumerate(keys(ap2constraints))
+	for ap in keys(ap2constraints)
+
 		A, b = ap2constraints[ap]
 		reg = HPolytope(constraints_list(A,b))
 		if isempty(reg)
@@ -51,6 +52,7 @@ function get_vrep(ap2input)
 	return ap2vertices
 end
 
+
 function make_figure_1(ap2input, ap2output, limits)
 	in1  = plot_hrep_random(ap2input, limit=limits[1])
 	in2  = plot_hrep_random(ap2input, limit=limits[2])
@@ -67,12 +69,31 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-# using OrderedCollections # use if we care about plotting the tesselation incrementally
+
+make_fig_1 = false
 
 in_d, out_d, hdim, layers = 2, 2, 10, 3
-weights = random_net(in_d, out_d, hdim, layers) 
 
-Aᵢ, bᵢ = input_constraints_random(weights, "box")
+if make_fig_1
+	in_d, out_d, hdim, layers = 2, 2, 10, 3
+	weights = random_net(in_d, out_d, hdim, layers)
+	
+	# modify weights to scale up output for nicer plot
+	for (i,w) in enumerate(weights)
+		if i == 1
+			n_rows = size(w,1)
+			Γ = diagm(50*randn(n_rows))
+			Γ[end,end] = 1
+			weights[i] = Γ*w
+		end
+	end
+else
+	in_d, out_d, hdim, layers = 2, 2, 10, 5
+	weights = random_net(in_d, out_d, hdim, layers)
+end
+
+Aᵢ, bᵢ = input_constraints_random(weights, "big box")
+
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
