@@ -67,7 +67,6 @@ end
 ###########################
 ######## SCRIPTING ########
 ###########################
-# weights, nnet, net_dict = acas_net_nnet(5,6)
 weights = acas_net_nnet(5,7)
 
 

@@ -26,10 +26,9 @@ function input_constraints_random(weights, type::String)
 end
 
 # Plots all polyhedra
-function plot_hrep_random(ap2constraints)
+function plot_hrep_random(ap2constraints; limit=Inf)
 	plt = plot(reuse = false)
-	for ap in keys(ap2constraints)
-
+	for (i,ap) in enumerate(keys(ap2constraints))
 		A, b = ap2constraints[ap]
 		reg = HPolytope(constraints_list(A,b))
 		if isempty(reg)
@@ -109,4 +108,6 @@ if in_d == 2
 end
 
 # Make Figure 1 for paper
-# plt = make_figure_1(ap2input, ap2output, [1, 60, Inf])
+if make_fig_1
+	plt_fig_1 = make_figure_1(ap2input, ap2output, [1, 60, Inf])
+end
