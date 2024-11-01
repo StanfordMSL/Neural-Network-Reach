@@ -4,3 +4,6 @@ models/vanderpol/BRS_fig.png
 models/vanderpol/van_panel.png
 models/vanderpol/BRSs.jld2
 
+# vscode files
+.vscode
+

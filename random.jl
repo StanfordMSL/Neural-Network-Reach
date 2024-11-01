@@ -1,6 +1,5 @@
 using Plots
 include("reach.jl")
-include("invariance.jl")
 
 # Returns H-rep of various input sets
 function input_constraints_random(weights, type::String)
@@ -42,62 +41,23 @@ function plot_hrep_random(ap2constraints; limit=Inf)
 	return plt
 end
 
-function get_vrep(ap2input)
-	ap2vertices = Dict{Vector{BitVector}, Vector{Vector{Float64}} }() # Dict from ap -> vector of vertices for input polytope
-	for key in keys(ap2input)
-		A, b = ap2input[key]
-		ap2vertices[key] = tovrep(HPolytope(A,b)).vertices
-	end
-	return ap2vertices
-end
 
 
-function make_figure_1(ap2input, ap2output, limits)
-	in1  = plot_hrep_random(ap2input, limit=limits[1])
-	in2  = plot_hrep_random(ap2input, limit=limits[2])
-	in3  = plot_hrep_random(ap2input, limit=limits[3])
 
-	out1  = plot_hrep_random(ap2output, limit=limits[1])
-	out2  = plot_hrep_random(ap2output, limit=limits[2])
-	out3  = plot_hrep_random(ap2output, limit=limits[3])
-
-	plt = plot(in1, out1, in2, out2, in3, out3, layout=(3, 2), xlims=(-2,2), ylims=(-2,2), axis=nothing, size=(3*96, 4*96))
-	return plt
-end
 
 ###########################
 ######## SCRIPTING ########
 ###########################
 
-make_fig_1 = false
+in_d, out_d, hdim, layers = 2, 2, 10, 5
+weights = random_net(in_d, out_d, hdim, layers)
 
-in_d, out_d, hdim, layers = 2, 2, 10, 3
-
-if make_fig_1
-	in_d, out_d, hdim, layers = 2, 2, 10, 3
-	weights = random_net(in_d, out_d, hdim, layers)
-	
-	# modify weights to scale up output for nicer plot
-	for (i,w) in enumerate(weights)
-		if i == 1
-			n_rows = size(w,1)
-			Γ = diagm(50*randn(n_rows))
-			Γ[end,end] = 1
-			weights[i] = Γ*w
-		end
-	end
-else
-	in_d, out_d, hdim, layers = 2, 2, 10, 5
-	weights = random_net(in_d, out_d, hdim, layers)
-end
-
-Aᵢ, bᵢ = input_constraints_random(weights, "big box")
-
+Aᵢ, bᵢ = input_constraints_random(weights, "box")
 Aₒ = Matrix{Float64}(undef,0,0)
 bₒ = Vector{Float64}()
 
 @time begin
-ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=false, verification=false)
+ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true)
 end
 @show length(ap2input)
 
@@ -105,9 +65,4 @@ end
 # Plot all regions (only 2D input) #
 if in_d == 2
 	plt_in  = plot_hrep_random(ap2input, limit=Inf)
-end
-
-# Make Figure 1 for paper
-if make_fig_1
-	plt_fig_1 = make_figure_1(ap2input, ap2output, [1, 60, Inf])
 end

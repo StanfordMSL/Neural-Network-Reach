@@ -177,73 +177,11 @@ function pytorch_net(nn_weights, nn_params, copies::Int64)
 end
 
 
-```
-Load pytorch networks that are controllers for linear MPC models
-I apply the dynamics A matrix in the first layer to try to avoid hyperplanes through the origin
-```
-function pytorch_mpc_net(model, copies::Int64)
-	W = npzread(string("models/", model, "/weights.npz"))
-	params = npzread(string("models/", model, "/norm_params.npz"))
-
-	# x_+ = Ax + Bu
-	A = [1.2 1.2; 0.0 1.2]
-	B = reshape([1.0, 0.4], (2,1))
-
-	num_layers = Int(length(W)/2)
-	layer_sizes = params["layer_sizes"]
-
-	σᵢ = Float64.(Diagonal(vec(params["X_std"])))
-	μᵢ = Float64.(vec(params["X_mean"]))
-	σₒ = Float64.(Diagonal(vec(params["Y_std"])))
-	μₒ = Float64.(vec(params["Y_mean"]))
-	Aᵢₙ, bᵢₙ = inv(σᵢ), -inv(σᵢ)*μᵢ
-	Aₒᵤₜ, bₒᵤₜ = σₒ, μₒ
-
-	# make identity weights
-	sze = layer_sizes[1]
-	II = Matrix{Float64}(I, sze, sze)
-	# w_I1 = [A; -A]
-	w_I1 = [II; -II]
-	w_Im = [II -II; -II II]
-	b_I = zeros(2*sze)
-
-	# make single network augmented weights
-	w = Vector{Array{Float64,2}}(undef, num_layers)
-	weight = vcat(W[string("arr_", 0)]*Aᵢₙ, w_I1)
-	bias   = vcat(W[string("arr_", 1)] + W[string("arr_", 0)]*bᵢₙ, b_I)
-	w[1] = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[1]),1,:))
-	w[1][end,end] = 1
-	for i in 2:(num_layers-1)
-		weight = vcat(W[string("arr_", 2*(i-1))], zeros(2*sze,layer_sizes[i]))
-		weight = hcat(weight, vcat(zeros(layer_sizes[i+1],2*sze), w_Im))
-		bias   = vcat(W[string("arr_", 2*(i-1)+1)], b_I)
-		w[i]   = vcat(hcat(weight, vec(bias)), reshape(zeros(1+layer_sizes[i]+2*sze),1,:))
-		w[i][end,end] = 1
-	end
-	
-	weight = B*Aₒᵤₜ*W[string("arr_", 2*(num_layers-1))]
-	# weight = hcat(weight, [II -II])
-	weight = hcat(weight, [A -A])
-	bias   = B*(Aₒᵤₜ*W[string("arr_", 2*(num_layers-1)+1)] + bₒᵤₜ)
-	w[end] = hcat(weight, vec(bias))
-
-	# change layer sizes to be correct for this new network
-	for i in 2:length(layer_sizes)-1
-		layer_sizes[i] += 2*sze 
-	end
-	layer_sizes[end] = layer_sizes[1]
-
-	weights = chain_net(w, copies, num_layers)
-
-	return weights
-end
-
-
 # load in all taxinet networks to make closed-loop network
 # Need to change
 function taxinet_cl(copies::Int64)
 	net_a = taxinet_2input_resid() # x -> [u; x]
-	net_b = pytorch_net("models/taxinet/weights_dynamics_5hz.npz", "models/taxinet/norm_params_dynamics_5hz.npz", 1) # [u; x] -> x′
+	net_b = pytorch_net("models/taxinet/weights_dynamics_1hz_2nd.npz", "models/taxinet/norm_params_dynamics_1hz_2nd.npz", 1) # [u; x] -> x′
 
 	len_a = length(net_a)
 	len_b = length(net_b)
