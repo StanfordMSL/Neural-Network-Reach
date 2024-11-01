@@ -42,6 +42,11 @@ function find_fixed_points(state2map, state2input, weights)
 				push!(fixed_points, fp)
 				fp_dict[fp] = [(A, b), (C, d)]
 				println("Found fixed point.")
+				if all(norm.(eigen(C).values) .< 1)
+					println("Fixed point is a stable equilibrium")
+				else
+					println("Fixed point is an unstable equilibrium")
+				end
 			end
 		else
 			error("Non-unique fixed point! Make more general")

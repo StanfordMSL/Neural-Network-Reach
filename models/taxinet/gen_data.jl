@@ -42,11 +42,11 @@ end
 function gen_data_RK(n::Int)
 	X, Y = Matrix{Float64}(undef, n, 3), Matrix{Float64}(undef, n, 2)
 	for i in 1:n
-		X[i,:] = [bound_r(-20., 20.), bound_r(-11.,11.), bound_r(-30.,30.)] # [u; x] input bounds
-		Y[i,:] = RK_update(X[i,2:3], X[i,1], 0.2)
+		X[i,:] = [bound_r(-30., 30.), bound_r(-15.,15.), bound_r(-30.,30.)] # [u; x] input bounds
+		Y[i,:] = RK_update(X[i,2:3], X[i,1], 1.0)
 	end
-	npzwrite("models/taxinet/X_dynamics_5hz.npy", X)
-	npzwrite("models/taxinet/Y_dynamics_5hz.npy", Y)
+	npzwrite("models/taxinet/X_dynamics_1hz.npy", X)
+	npzwrite("models/taxinet/Y_dynamics_1hz.npy", Y)
 	return nothing
 end
 

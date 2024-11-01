@@ -7,15 +7,6 @@ function input_constraints_pendulum(weights, type::String)
 	if type == "pendulum"
 		A = [1. 0; -1 0; 0 1; 0 -1]
 		b = deg2rad.([90., 90, 90, 90])
-	elseif type == "box"
-		in_dim = size(weights[1],2) - 1
-		A_pos = Matrix{Float64}(I, in_dim, in_dim)
-		A_neg = Matrix{Float64}(-I, in_dim, in_dim)
-		A = vcat(A_pos, A_neg)
-		b = 0.01*ones(2*in_dim)
-	elseif type == "hexagon"
-		A = [1. 0; -1 0; 0 1; 0 -1; 1 1; -1 1; 1 -1; -1 -1]
-		b = [5., 5, 5, 5, 8, 8, 8, 8]
 	else
 		error("Invalid input constraint specification.")
 	end
@@ -60,7 +51,7 @@ end
 ######## SCRIPTING ########
 ###########################
 copies = 50 # copies = 1 is original network
-model = "models/Pendulum/NN_params_pendulum_0_1s_1e7data_a15_12_2_L1.mat"
+model = "models/Pendulum/NN_params_pendulum.mat"
 weights = pendulum_net(model, copies)
 
 Aᵢ, bᵢ = input_constraints_pendulum(weights, "pendulum")
@@ -68,8 +59,7 @@ Aₒ, bₒ = output_constraints_pendulum(weights, "origin")
 
 # Run algorithm
 @time begin
-ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=true, verification=false)
-
+ap2input, ap2output, ap2map, ap2backward = compute_reach(weights, Aᵢ, bᵢ, [Aₒ], [bₒ], reach=true, back=true)
 end
 @show length(ap2input)
 
