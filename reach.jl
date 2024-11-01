@@ -1,8 +1,9 @@
-using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib, OrderedCollections
+using Plots, LinearAlgebra, JuMP, GLPK, LazySets, Polyhedra, CDDLib, OrderedCollections, FileIO, JLD2
+# using Clp
 include("load_networks.jl")
 include("unique_custom.jl")
 
-ϵ = 1e-10 # used for numerical tolerances throughout
+ϵ = 1e-15 # used for numerical tolerances throughout
 
 ### GENERAL PURPOSE FUNCTIONS ###
 
@@ -175,16 +176,15 @@ end
 ### FUNCTIONS FOR REMOVING REDUNDANT CONSTRAINTS ###
 # Remove redundant constraints (rows of A,b).
 # If we relax a constraint, can we push past where its initial 'b' value was? It's essential iff yes.
-function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential)
+function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential, ap)
 	
-	redundant, redundantᵢ = remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices)
+	redundant, redundantᵢ = remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices) # bounding box heuristic
 	non_redundant  = setdiff(unique_nonzerow_indices, redundant) # working non-redundant set
 	non_redundantᵢ = setdiff(collect(1:length(bᵢ)), redundantᵢ)  # working non-redundant set
-	essentialᵢ = Vector{Int64}() #; essential  = Vector{Int64}()
+	essentialᵢ     = Vector{Int64}() #; essential  = Vector{Int64}()
 	unknown_set    = setdiff(non_redundant, essential)           # working non-redundant and non-essential set
 	unknown_setᵢ   = setdiff(non_redundantᵢ, essentialᵢ)         # working non-redundant and non-essential set
-
-	essential, essentialᵢ = exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ)
+	essential, essentialᵢ = exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, ap)
 	essential == [] && essentialᵢ == [] ? error("No essential constraints!") : nothing
 	saved_lps = length(essential)+length(essentialᵢ) + length(redundant)+length(redundantᵢ)-2*size(A,2)
 	solved_lps = 2*size(A,2) + length(unknown_set) + length(unknown_setᵢ)
@@ -198,6 +198,7 @@ function remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, essential)
 end
 
 function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; presolve=false)
+	# implements the bounding box heuristic
 	redundant = Vector{Int64}()
 	redundantᵢ = Vector{Int64}()
 	bounds = Matrix{Float64}(undef,size(A,2),2) # [min₁ max₁; ... ;minₙ maxₙ]
@@ -216,9 +217,15 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 				bounds[i,j] = objective_value(model)
 			elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
 				return remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, presolve=true)
+			elseif termination_status(model) == MOI.INFEASIBLE && !presolve
+				return remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, presolve=true)
 			else
-				@show termination_status(model)
-				error("Suboptimal LP bounding box!")
+				# bounding box heuristic failed
+				println("Bounding box heuristic failed!")
+				return redundant, redundantᵢ
+				# @show termination_status(model)
+				# println(model)
+				# error("Suboptimal LP bounding box!")
 			end
 		end
 	end
@@ -226,13 +233,12 @@ function remove_redundant_bounds(A, b, Aᵢ, bᵢ, unique_nonzerow_indices; pres
 	# Find redundant constraints
 	for i in unique_nonzerow_indices
 		val = sum([A[i,j] > 0 ? A[i,j]*bounds[j,2] : A[i,j]*bounds[j,1] for j in axes(A,2)])
-		val + ϵ < b[i]  ? push!(redundant,i) : nothing
+		val + 1e-4 < b[i]  ? push!(redundant,i) : nothing
 	end
 	if bᵢ != []
-
 		for i in eachindex(bᵢ)
 			val = sum([Aᵢ[i,j] > 0 ? Aᵢ[i,j]*bounds[j,2] : Aᵢ[i,j]*bounds[j,1] for j in axes(Aᵢ,2)])
-			val + ϵ < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
+			val + 1e-4 < bᵢ[i]  ? push!(redundantᵢ,i) : nothing
 		end
 	end
 	return redundant, redundantᵢ
@@ -240,27 +246,32 @@ end
 
 # Brute force removal of LP constraints given we've performed heurstics to find essential and redundant constraints already
 # Dynamic memory allocation might be slowing this down (e.g. push!)
-function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ; presolve=false)
+function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, ap; presolve=false)
 	model = Model(GLPK.Optimizer)
+	# model = Model(() -> Clp.Optimizer(; want_infeasibility_certificates = false))
+	# set_optimizer_attribute(model, "meth", GLPK.GLP_DUALP) # use dual simplex so we can early stop
 	presolve ? set_optimizer_attribute(model, "presolve", 1) : nothing
 	@variable(model, x[1:size(A,2)])
 	@constraint(model, con[j in non_redundant], dot(A[j,:],x) <= b[j])
 	bᵢ != [] ? @constraint(model, conₛ[j in non_redundantᵢ], dot(Aᵢ[j,:],x) <= bᵢ[j]) : nothing # tack on non-redundant superset constraints
 
 	for (k,i) in enumerate(unknown_set)
+		# solving maximization
 		@objective(model, Max, dot(A[i,:],x))
-		set_normalized_rhs(con[i], b[i]+100) # relax ith constraint
+		set_normalized_rhs(con[i], b[i]+100) # relax ith constraint in case it is essential
 		k > 1 ? set_normalized_rhs(con[unknown_set[k-1]], b[unknown_set[k-1]]) : nothing # un-relax i-1 constraint
+		# set_optimizer_attribute(model, "obj_ul", b[i] + ϵ) # stop the solve if objective value past the threshold
 		optimize!(model)
 		if termination_status(model) == MOI.OPTIMAL
-			if objective_value(model) > b[i] + ϵ # 1e-15 is too small.
+			if objective_value(model) ≥ b[i] + ϵ # 1e-15 is too small.
 				push!(essential, i)
 			end
 		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
-			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ; presolve=true)
+			return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, ap; presolve=true)
 		else
 			@show termination_status(model)
 			println("Dual infeasible implies that primal is unbounded.")
+			save("error_states/latest_error_ap.jld2", Dict("ap" => ap))
 			error("Suboptimal LP constraint check!")
 		end
 	end
@@ -271,13 +282,99 @@ function exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundan
 			@objective(model, Max, dot(Aᵢ[i,:],x))
 			set_normalized_rhs(conₛ[i], bᵢ[i]+100) # relax ith constraint
 			k > 1 ? set_normalized_rhs(conₛ[unknown_setᵢ[k-1]], bᵢ[unknown_setᵢ[k-1]]) : nothing # un-relax i-1 constraint
+			# set_optimizer_attribute(model, "obj_ul", bᵢ[i] + ϵ)
 			optimize!(model)
 			if termination_status(model) == MOI.OPTIMAL
-				if objective_value(model) > bᵢ[i] + ϵ
+				if objective_value(model) ≥ bᵢ[i] + ϵ
 					push!(essentialᵢ, i)
 				end
 			elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
 				return exact_lp_remove(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ, presolve=true)
+			else
+				@show termination_status(model)
+				println("Dual infeasible implies that primal is unbounded.")
+				error("Suboptimal LP constraint check!")
+			end
+		end
+	end
+	return essential, essentialᵢ
+end
+
+
+
+
+
+
+
+
+
+
+
+
+# Brute force removal of LP constraints given we've performed heurstics to find essential and redundant constraints already
+# Dynamic memory allocation might be slowing this down (e.g. push!)
+function exact_lp_remove_feas(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ; presolve=false)
+	model = Model(GLPK.Optimizer)
+	# set_optimizer_attribute(model, "want_infeasibility_certificates", 0)
+	# set_optimizer_attribute(model, "meth", "GLP_DUALP")
+	# set_optimizer_attribute(model, "obj_ul", 0)
+	
+	@objective(model, MOI.FEASIBILITY_SENSE, 0)
+	presolve ? set_optimizer_attribute(model, "presolve", 1) : nothing
+	@variable(model, x[1:size(A,2)])
+	@constraint(model, con[j in non_redundant], dot(A[j,:],x) <= b[j])
+	bᵢ != [] ? @constraint(model, conₛ[j in non_redundantᵢ], dot(Aᵢ[j,:],x) <= bᵢ[j]) : nothing # tack on non-redundant superset constraints
+
+	for (k,i) in enumerate(unknown_set)
+		# reset last flipped constraint
+		if k > 1
+			i_prev = unknown_set[k-1]
+			set_normalized_coefficient([con[i_prev] for _ in 1:length(x)], x, A[i_prev,:])
+			set_normalized_rhs(con[i_prev], b[i_prev])
+		end
+			
+		# flip consraint and solve problem
+		set_normalized_coefficient([con[i] for _ in 1:length(x)], x, -A[i,:])
+		set_normalized_rhs(con[i], -b[i] - ϵ)
+		optimize!(model)
+
+		# mark constraint as redundant or essential
+		if termination_status(model) == MOI.OPTIMAL # essential
+			push!(essential, i)
+		elseif termination_status(model) == MOI.INFEASIBLE # redundant
+			nothing
+		elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
+			return exact_lp_remove_feas(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ; presolve=true)
+		else
+			@show termination_status(model)
+			println("Dual infeasible implies that primal is unbounded.")
+			error("Suboptimal LP constraint check!")
+		end
+	end
+
+	if bᵢ != []
+		# Brute force LP method on superset constraints#
+		for (k,i) in enumerate(unknown_setᵢ)
+			# reset last flipped constraint
+			if k > 1
+				i_prev = unknown_setᵢ[k-1]
+				set_normalized_coefficient([conₛ[i_prev] for _ in 1:length(x)], x, Aᵢ[i_prev,:])
+				set_normalized_rhs(conₛ[i_prev], bᵢ[i_prev])
+			end
+				
+			# flip consraint and solve problem
+			set_normalized_coefficient([conₛ[i] for _ in 1:length(x)], x, -Aᵢ[i,:])
+			set_normalized_rhs(conₛ[i], -bᵢ[i] - ϵ)
+			optimize!(model)
+
+
+			# mark constraint as redundant or essential
+			if termination_status(model) == MOI.OPTIMAL # essential
+				push!(essentialᵢ, i)
+			elseif termination_status(model) == MOI.INFEASIBLE # redundant
+				nothing
+			elseif termination_status(model) == MOI.NUMERICAL_ERROR && !presolve
+				return exact_lp_remove_feas(A, b, Aᵢ, bᵢ, essential, essentialᵢ, non_redundant, non_redundantᵢ, unknown_set, unknown_setᵢ; presolve=true)
 			else
 				@show termination_status(model)
 				println("Dual infeasible implies that primal is unbounded.")
@@ -315,6 +412,12 @@ function add_neighbor_aps(ap::Vector{BitVector}, neighbor_indices::Vector{Int64}
 		type1 = idx2repeat[idx]
 		type2 = zerows
 		neighbor_ap = flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
+
+		# error_ap = load("error_states/error_ap_9.25.24.jld2")["ap"]
+		# if neighbor_ap == error_ap
+		# 	save("error_states/parent_ap_9.25.24.jld2", Dict("ap" => ap))
+		# 	error("Found parent!")
+		# end
 		
 		if graph
 			if !haskey(ap2neighbors, ap)
@@ -352,7 +455,12 @@ function flip_neurons!(type1, type2, neighbor_ap, weights, neighbor_constraint)
 
 		if isapprox(a′, -a, atol=ϵ ) && isapprox(b′, -b, atol=ϵ )
 			neighbor_ap[l][n] = !neighbor_ap[l][n]
-		end	
+
+		elseif isapprox(a′, zeros(length(a)), atol=ϵ ) && isapprox(b′, 0, atol=ϵ )
+			neighbor_ap[l][n] = 0
+		end
+
+
 	end
 
 	return neighbor_ap
@@ -525,15 +633,16 @@ end
 # Given input point and weights return ap2input, ap2output, ap2map, plt_in, plt_out
 # set reach=false for just cell enumeration
 # Supports looking for multiple backward reachable sets at once
-function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; fp = [], reach=false, back=false, verification=false, connected=false, graph=false)
+function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}}; fp = [], reach=false, back=false, connected=false, graph=false, check_aps=false)
 	# Construct necessary data structures #
-	ap2input    = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
-	ap2output   = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
-	ap2backward = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
-	ap2map      = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
+	ap2input     = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A,b) input constraints
+	ap2output    = OrderedDict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (A′,b′) ouput constraints
+	ap2backward  = [Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}}}() for _ in 1:length(Aₒ)]
+	ap2map       = Dict{Vector{BitVector}, Tuple{Matrix{Float64},Vector{Float64}} }() # Dict from ap -> (C,d) local affine map
 	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
 	ap2neighbors = Dict{Vector{BitVector}, Vector{Vector{BitVector}}}() # Dict from ap to vector of neighboring aps
-	working_set = Set{Vector{BitVector}}() # Network aps we want to explore
+	working_set  = Set{Vector{BitVector}}() # Network aps we want to explore
+	
 	# Initialize algorithm #
 	fp == [] ? input = get_input(Aᵢ, bᵢ) : input = fp # this may fail if initialized on the boundary of a cell
 	ap = get_ap(input, weights)
@@ -541,40 +650,34 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	push!(working_set, ap)
 	num_neurons = sum([length(ap[layer]) for layer in eachindex(ap)])
 	
-	# Begin cell enumeration #
-	i, saved_lps, solved_lps, rank_deficient = (1, 0, 0, 0)
+	# Begin enumeration of affine regions #
+	i, saved_lps, solved_lps = (1, 0, 0)
 	while !isempty(working_set)
-		println(i)
+		println("# of affine regions: ", i)
 		ap = pop!(working_set)
 
 		# Get local affine_map
 		C, d = local_map(ap, weights)
-		rank(C) != min(size(C)...) ? rank_deficient += 1 : nothing
 		ap2map[ap] = (C,d)
-
+		
+		# get local polytope
 		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, ap, num_neurons)
-
-		# We can check this before removing redundant constraints
-		if verification
-			for k in 1:length(Aₒ)
-				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
-				if poly_intersection(A, b, Aᵤ, bᵤ)
-					println("Found input that maps to target set!")
-					@show ap
-					return ap2input, ap2output, ap2map, ap2backward
-				end
-			end
+		
+		# whether to double check generated ap matches that of a sample point
+		if check_aps
+			center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices)[1:3] # Chebyshev center
+			check_ap(center, weights, ap)
 		end
 		
-		# Uncomment these lines to double check generated ap is correct
-		center, essential, essentialᵢ = cheby_lp(A, b, Aᵢ, bᵢ, unique_nonzerow_indices)[1:3] # Chebyshev center
-		check_ap(center, weights, ap)
+		# remove redundant constraints in the polyhedron
+		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap], ap)
 
-		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap])
-
-
+		# compute compute forward reachable set
 		reach ? ap2output[ap] = affine_map(A, b, C, d) : nothing
-		if back && connected # only add neighbors of cells that are in the BRS
+		
+		# compute backward reachable set
+		if back && connected 
+			# only add neighbors of cells that are in the BRS
 			for k in 1:length(Aₒ)
 				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
 				if poly_intersection(A, b, Aᵤ, bᵤ)
@@ -582,25 +685,24 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 					working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
 				end
 			end
-		elseif back # add neighbors of all cells
-			for k in 1:length(Aₒ)
-				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
-				if poly_intersection(A, b, Aᵤ, bᵤ)
-					ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
+		else
+			if back 
+				# add neighbors of all cells
+				for k in 1:length(Aₒ)
+					Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
+					if poly_intersection(A, b, Aᵤ, bᵤ)
+						ap2backward[k][ap] = (vcat(A, Aᵤ), vcat(b, bᵤ)) # not a fully reduced representation
+					end
 				end
 			end
 			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
-		else
-			# add neighbors of all cells
-			working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors, graph=graph)
 		end
-		# ap2input[ap] = (vcat(A, Aᵢ), vcat(b, bᵢ))
+
 		ap2input[ap] = (A, b)
-		
+	
+		# update counts
 		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
 	end
-	verification ? println("No input maps to the target set.") : nothing
-	println("Rank deficient maps: ", rank_deficient)
 	total_lps = saved_lps + solved_lps
 	println("Total solved LPs: ", solved_lps)
 	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
@@ -610,4 +712,73 @@ function compute_reach(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, A�
 	else
 		return ap2input, ap2output, ap2map, ap2backward
 	end
+end
+
+
+
+
+function verify_safety(weights, Aᵢ::Matrix{Float64}, bᵢ::Vector{Float64}, Aₒ::Vector{Matrix{Float64}}, bₒ::Vector{Vector{Float64}})
+	# Construct necessary data structures #
+	ap2essential = Dict{Vector{BitVector}, Vector{Int64}}() # Dict from ap to neuron indices we know are essential
+	ap2neighbors = Dict{Vector{BitVector}, Vector{Vector{BitVector}}}() # Dict from ap to vector of neighboring aps
+	working_set  = Set{Vector{BitVector}}() # Network aps we want to explore
+	ap_unsafe    = Dict{Int32, Vector{BitVector}}() # dictionary mapping of unsafe output set to example unsafe activation pattern
+	
+	# Initialize algorithm #
+	input = get_input(Aᵢ, bᵢ) # this may fail if initialized on the boundary of a cell
+	ap = get_ap(input, weights)
+	ap2essential[ap] = Vector{Int64}()
+	push!(working_set, ap)
+	num_neurons = sum([length(ap[layer]) for layer in eachindex(ap)])
+	
+	# Begin enumeration of affine regions #
+	i, saved_lps, solved_lps = (1, 0, 0)
+	while !isempty(working_set)
+		println("# of affine regions: ", i)
+		ap = pop!(working_set)
+
+		# Get local affine_map
+		C, d = local_map(ap, weights)
+		
+		# get local polyhedron
+		A, b, idx2repeat, zerows, unique_nonzerow_indices = get_constraints(weights, ap, num_neurons)
+
+		# check safety of local polyhedron
+		for k in 1:length(Aₒ)
+			# don't check if already proven unsafe
+			if !haskey(ap_unsafe, k)
+				# compute preimage of unsafe set and check intersection with current polyhedron
+				Aᵤ, bᵤ = (Aₒ[k]*C, bₒ[k]-Aₒ[k]*d) # for Aₒy ≤ bₒ and y = Cx+d -> AₒCx ≤ bₒ-Aₒd
+				if poly_intersection(A, b, Aᵤ, bᵤ)
+					ap_unsafe[k] = ap
+					println("Found and unsafe activation patter for the ", k, "th output set!")
+				end
+			end
+		end	
+
+		# if all already proven unsafe, then skip to return
+		if keys(ap_unsafe) == Set(1:length(Aₒ))
+			break
+		end
+			
+		# remove redundant constraints in the polyhedron
+		A, b, neighbor_indices, saved_lps_i, solved_lps_i = remove_redundant(A, b, Aᵢ, bᵢ, unique_nonzerow_indices, ap2essential[ap], ap)
+
+		# add neighbors of all cells
+		working_set, ap2essential = add_neighbor_aps(ap, neighbor_indices, working_set, idx2repeat, zerows, weights, ap2essential, ap2neighbors)
+	
+		# update counts
+		i += 1;	saved_lps += saved_lps_i; solved_lps += solved_lps_i
+	end
+	# creat binary vector where 1 indicates that output set was unsafe
+	vec_unsafe = falses(length(Aₒ))
+	if !isempty(ap_unsafe)
+		vec_unsafe[collect(keys(ap_unsafe))] .= true
+	end
+
+	total_lps = saved_lps + solved_lps
+	println("Total solved LPs: ", solved_lps)
+	println("Total saved LPs:  ", saved_lps, "/", total_lps, " : ", round(100*saved_lps/total_lps, digits=1), "% pruned." )
+
+	return ap_unsafe, vec_unsafe
 end

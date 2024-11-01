@@ -1,54 +1,27 @@
-using MATLAB
+using MAT, FileIO, JLD2
 
-#=
-Given a set of polytopes, interface with the Matlab MPT toolbox to merge
-the given union of polytopes into a union of fewer polytopes.
-Greedy merging wasn't working for me so I'm using optimal merging.
-=#
-function merge_polytopes(polytopes::Set{ Tuple{Matrix{Float64}, Vector{Float64}} }; verbose=false)
-	verbose ? println("Started with ", length(polytopes), " polytopes") : nothing
+BRS = load("models/taxinet/taxinet_brs_10_step.jld2")
 
-	# Send polytopes to Matlab variables
-	As = Vector{Matrix{Float64}}(undef, length(polytopes))
-	bs = Vector{Vector{Float64}}(undef, length(polytopes))
-	for (i,polytope) in enumerate(polytopes)
-		As[i] = polytope[1]
-		bs[i] = polytope[2]
-	end 
-	As_mat = mxarray(As)
-	bs_mat = mxarray(bs)
+polytopes = BRS["brs"]
 
-	# interface with Matlab MPT merge() method for PolyUnion objects
-	# optimal merging creates a polytopic covering an hence we set overlaps to true.
-	mat"""
-	addpath(genpath('../tbxmanager/toolboxes'));
-	temp = mptopt('lpsolver', 'GLPK');
-	clear P;
-	clear U;
-	clear merged;
-	for i = 1:length($As_mat)
-		P(i) = Polyhedron($As_mat{i}, $bs_mat{i});
-	end
-	U = PolyUnion('Set',P,'convex',false,'overlaps',true,'Connected',true,'fulldim',true,'bounded',true);
-	merged = U.merge('optimal', false);
-	$len_m = length(merged.Set);
-	$As_merged = cell($len_m,1);
-	$bs_merged = cell($len_m,1);
+# Send polytopes to Matlab variables
+As = Vector{Matrix{Float64}}(undef, length(polytopes))
+bs = Vector{Vector{Float64}}(undef, length(polytopes))
+for (i,key) in enumerate(keys(polytopes))
+	polytope = polytopes[key]
+	As[i] = polytope[1]
+	bs[i] = polytope[2]
+end 
 
-	for i = 1:$len_m
-		$As_merged{i,1} = merged.Set(i).A;
-	 	$bs_merged{i,1} = merged.Set(i).b;
-	end
-	"""
+# save matlab data structures
+# matwrite("models/taxinet/taxinet_brs_10_step.mat", Dict("As_mat" => As, "bs_mat" => bs))
 
-	# Send merged polytopes to Julia variables
-	verbose ? println("Ended with ", length(As_merged), " polytopes") : nothing
-	merged_set = Set{ Tuple{Matrix{Float64}, Vector{Float64}} }()
-	for i in 1:length(As_merged)
-		push!(merged_set, (As_merged[i], bs_merged[i]))
-	end
-
-	return merged_set
-end
-
-
+# save .mat as .jld2
+# vars = matread("taxinet_brs_10_step_overlap.mat")
+# As = vars["As_merged"]
+# bs = vars["bs_merged"]
+# polytopes = Set{Tuple{Matrix{Float64}, Vector{Float64}}}()
+# for i in 1:length(As)
+# 	push!(polytopes, (As[i], bs[i][:,1]))
+# end
+# save("taxinet_brs_10_step_overlap.jld2", Dict("brs" => polytopes))
